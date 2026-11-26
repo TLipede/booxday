@@ -3927,7 +3927,9 @@ class BooxNoteIndexer(
         events: List<CalendarEvent>,
         onProgress: (Float) -> Unit = {}
     ): List<LlmMatchResult> = withContext(Dispatchers.IO) {
-        if (!isSmartLinkRuntimeEnabled()) {
+        if (!com.boox.day.api.ai.AiProvider.allows(com.boox.day.api.ai.AiProvider.OPENROUTER) ||
+            !isSmartLinkRuntimeEnabled()
+        ) {
             logSmartLinkRuntimeDisabled("LLM Smart Link analysis")
             onProgress(1f)
             return@withContext emptyList()
@@ -4078,7 +4080,7 @@ CONFIDENCE GUIDE:
                                 enableReasoning()
                             }
 
-                            when (val response = AiClient.execute(request)) {
+                            when (val response = AiClient.execute(request, promptForKey = false)) {
                                 is AiResponse.Success -> {
                                     Log.i(TAG, "Batch ${batchIndex + 1} LLM analysis succeeded with model: $modelName")
                                     onProgress(0.3f + progressPerBatch * (batchIndex + 1))

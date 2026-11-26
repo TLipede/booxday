@@ -16,6 +16,7 @@ import com.boox.day.api.ReasoningConfig
 import com.boox.day.api.ai.AiClient
 import com.boox.day.api.ai.AiModel
 import com.boox.day.api.ai.AiProblem
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.api.ai.AiRequest
 import com.boox.day.api.ai.AiResponse
 import com.boox.day.api.ai.aiRequest
@@ -83,6 +84,9 @@ RULES:
 
     suspend fun recognizeText(bitmap: Bitmap): Result =
         com.boox.day.api.ai.LastAiProblem.withScope("background_ocr") {
+            if (AiProvider.current == AiProvider.CHATGPT) {
+                return@withScope Result.Paused(AiProblem.CHATGPT_INDEXING_PAUSED)
+            }
             val base64 = withContext(Dispatchers.Default) { encodeJpeg(bitmap) }
             val models = ModelConfigProvider.getChain(AiJob.SEARCH_INDEXING)
             recognizeWithModels(base64, models)
@@ -132,6 +136,8 @@ RULES:
                         is Result.Paused -> return parsed
                     }
                 }
+                is AiResponse.Error.RouteChanged,
+                is AiResponse.Error.ChatGpt,
                 is AiResponse.Error.NoApiKey,
                 is AiResponse.Error.KeyRejected -> return resultFor(response, network())
                 is AiResponse.Error.OutOfCredit -> {

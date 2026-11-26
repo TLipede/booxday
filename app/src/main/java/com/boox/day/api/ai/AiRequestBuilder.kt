@@ -79,7 +79,7 @@ class AiRequestBuilder {
      * @throws IllegalArgumentException if model doesn't have AUDIO capability
      */
     fun userMessageWithAudio(text: String, audioBase64: String, mimeType: String = "audio/wav") = apply {
-        require(model.hasCapability(AiCapability.AUDIO)) {
+        require(model is AiModel.ChatGpt || model.hasCapability(AiCapability.AUDIO)) {
             "Model ${model.displayName} does not support audio input. " +
                 "Use an audio-capable model like Gemini2Flash."
         }
@@ -126,7 +126,7 @@ class AiRequestBuilder {
      * @throws IllegalArgumentException if model doesn't have REASONING capability
      */
     fun enableReasoning() = apply {
-        require(model.hasCapability(AiCapability.REASONING)) {
+        require(model is AiModel.ChatGpt || model.hasCapability(AiCapability.REASONING)) {
             "Model ${model.displayName} does not support reasoning. " +
                 "Use a model like GrokVision that supports extended thinking."
         }

@@ -27,14 +27,14 @@
 <main>
   <a class="back" href="../">BooxDay home</a>
   <h1>BooxDay Privacy Policy</h1>
-  <p class="meta">Last updated: 25 November 2026</p>
+  <p class="meta">Last updated: 26 November 2026</p>
 
   <div class="box">
     <p><strong>In short:</strong></p>
     <ul>
       <li>BooxDay has no server and no user accounts of its own. The developer never receives your data.</li>
       <li>Your planner, including calendar data from Google, Outlook, iCloud or another calendar server you add, is stored on your tablet.</li>
-      <li>Data leaves your tablet only for features you use: to Google or Microsoft to sync your calendar or save backups, to the calendar server you add (such as iCloud) to sync its calendars, to Google Tasks, Microsoft To Do or the calendar server you add to sync your tasks if you turn on Task Sync, and to OpenRouter when you use AI features with your own OpenRouter account.</li>
+      <li>Data leaves your tablet only for features you use: to Google or Microsoft to sync your calendar or save backups, to the calendar server you add (such as iCloud) to sync its calendars, to Google Tasks, Microsoft To Do or the calendar server you add to sync your tasks if you turn on Task Sync, and to OpenRouter or OpenAI when you use AI features with your selected provider.</li>
       <li>No ads, no analytics, no tracking. Your data is never sold.</li>
     </ul>
   </div>
@@ -73,7 +73,7 @@
   <p>BooxDay doesn't sell Google user data, doesn't use it for advertising, and doesn't send it to the developer. No person reads it. BooxDay doesn't use Google user data to develop, improve or train AI or machine-learning models. Google user data leaves your tablet only in these cases:</p>
   <ul>
     <li><strong>Google</strong>, to sync your calendar, your tasks (if you turn on Task Sync) and Drive backups.</li>
-    <li><strong>OpenRouter</strong>, when you use an AI feature that needs your schedule (events and tasks, including synced tasks), on your own OpenRouter account (see "AI features").</li>
+    <li><strong>Your selected AI provider</strong> (OpenRouter or OpenAI), when you use an AI feature that needs your schedule (events and tasks, including synced tasks) (see "AI features").</li>
     <li><strong>Files you turn on</strong>: the sleep screen image and daily notes files, saved on your tablet (see below).</li>
     <li><strong>A crash report you choose to send</strong> (see "Crash reports").</li>
     <li><strong>Android's own device backup.</strong> If backup is turned on in your tablet's settings, Android may include BooxDay's data, which contains your synced calendar and task data, in the backup it saves to your Google account. This is an Android feature that you control in the tablet's settings.</li>
@@ -81,7 +81,7 @@
   <p>BooxDay's use and transfer of information received from Google APIs to any other app will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
 
   <h2>Microsoft Outlook data</h2>
-  <p>If you connect an Outlook or Microsoft 365 account, BooxDay uses Microsoft sign-in with the permissions to read your basic profile and to read and write your calendars. It uses your calendars and events the same way as Google Calendar data above: stored on your tablet, synced with Microsoft, and sent to OpenRouter only by the AI features described below. Microsoft sign-in tokens are kept on the tablet by Microsoft's sign-in library.</p>
+  <p>If you connect an Outlook or Microsoft 365 account, BooxDay uses Microsoft sign-in with the permissions to read your basic profile and to read and write your calendars. It uses your calendars and events the same way as Google Calendar data above: stored on your tablet, synced with Microsoft, and shared with your selected AI provider only by the AI features described below. Microsoft sign-in tokens are kept on the tablet by Microsoft's sign-in library.</p>
   <p>If you turn on Task Sync with a Microsoft account, BooxDay asks Microsoft for permission to read and write your Microsoft To Do tasks. It brings in the tasks from the lists you tick (never the Flagged email list) and saves to them the words, done mark, due date, your own reminder time, a star for priority A, and subtasks as steps. It doesn't change task notes or attachments. A synced task you clear in BooxDay is deleted in To Do too, except a repeating one, which stays.</p>
   <p>If you choose OneDrive for backups, BooxDay asks Microsoft for access to its own folder only (OneDrive › Apps › BooxDay). It saves backup files there and can't see or open any other file in your OneDrive.</p>
 
@@ -89,22 +89,23 @@
   <p>If you add an iCloud, Fastmail, Nextcloud or other calendar account (Settings → Calendar Accounts → iCloud &amp; more), BooxDay connects directly to that account's server with the address, name and password you type. It reads the list of your calendars (names and colours) and, on the calendars you choose to sync, each event from two months back to three months ahead. It keeps each event as the server sent it, so that a change saved in BooxDay keeps the parts BooxDay doesn't show, such as alarms and guests.</p>
   <p>BooxDay writes to the server only when you save or delete an event in BooxDay. It never adds guests to these events, so the server sends no invitations.</p>
   <p>Your password is stored encrypted on the tablet, is sent only to that server, and is never included in backups (BooxDay's or Android's). If your server uses its own security certificate, as home servers often do, BooxDay connects only after you choose Trust This Server, and remembers that certificate.</p>
-  <p>These events are used the same way as Google Calendar data above: stored on your tablet, synced with your server, and sent to OpenRouter only by the AI features described below.</p>
+  <p>These events are used the same way as Google Calendar data above: stored on your tablet, synced with your server, and shared with your selected AI provider only by the AI features described below.</p>
   <p>If you turn on Task Sync with one of these accounts (not iCloud: Apple doesn't share Reminders with other apps), BooxDay also reads the names of its task lists and, in the lists you tick, each task, and saves to them the words, done mark, due date, priority, reminder time and subtasks of the tasks you write in BooxDay. It keeps each task as the server sent it, so a change saved in BooxDay keeps the parts BooxDay doesn't show, such as notes. A task that repeats comes to each day it's due in the coming week; ticking, changing or clearing one of those days saves that day's change in the task on the server. A synced task you clear or delete in BooxDay is deleted on the server too.</p>
 
-  <h2>AI features (OpenRouter)</h2>
-  <p>AI features are optional and work only after you connect your own <a href="https://openrouter.ai">OpenRouter</a> account. BooxDay has no AI key of its own. When you use an AI feature, BooxDay sends what that feature needs to OpenRouter, which passes it to the AI model provider that answers. OpenRouter and that provider handle it under their own privacy policies (<a href="https://openrouter.ai/privacy">OpenRouter's privacy policy</a>). You can control which providers your account may use in your OpenRouter settings. With AI Features off (Settings → AI Settings), BooxDay sends none of your data to OpenRouter.</p>
+  <h2>AI features</h2>
+  <p>AI features send the information they need to the provider you choose in AI Settings. <a href="https://openrouter.ai">OpenRouter</a> passes requests to the model provider under its own privacy policy and <a href="https://openrouter.ai/privacy">OpenRouter's privacy policy</a>. With ChatGPT selected, OpenAI receives sign-in information, requests and images directly under <a href="https://openai.com/policies/privacy-policy/">OpenAI's privacy policy</a>. Responses requests turn off response storage. OpenAI's other data controls and policies apply.</p>
+  <p>BooxDay sends no inference requests while AI Features is off. You can still manage connections in AI Settings.</p>
   <ul>
     <li><strong>Optimize My Day, Daily Summary, Weekly Summary and Smart Suggestions</strong> send event details with your tasks and notes: titles, times, locations and, for some of them, attendee email addresses and part of the description. Optimize My Day includes events from all synced calendars, including calendars you have hidden from the calendar view, so it can avoid planning over them. These are sent only when you start the feature. The first time you use one, BooxDay tells you this and asks before sending anything. Smart Suggestions and Optimize My Day also send your AI options (how many suggestions you want, whether Vacation mode is on, and whether you want health or social ideas).</li>
-    <li><strong>Reading your handwritten pages for search</strong> sends images of your BOOX Notes and memo pages in the background (task pages are read on the tablet), only while AI Features (Settings → AI Settings) and Read my handwriting (Settings → BOOX Notes &amp; Search → Handwriting Search, off until you turn it on) are on, and an OpenRouter key is saved. These requests ask OpenRouter to use only providers that don't keep the data. They contain no calendar data.</li>
+    <li><strong>Reading your handwritten pages for search</strong> sends images of your BOOX Notes and memo pages in the background (task pages are read on the tablet), only while AI Features (Settings → AI Settings) and Read my handwriting (Settings → BOOX Notes &amp; Search → Handwriting Search, off until you turn it on) are on, and OpenRouter is selected with a saved key. These requests ask OpenRouter to use only providers that don't keep the data. They contain no calendar data.</li>
     <li><strong>Handwriting to text, summaries, translation, turning memos into tasks and adding handwriting to your calendar</strong> send the memo or task text or page images you choose.</li>
     <li><strong>Meeting Recap</strong> sends the meeting's title and day and the words of its notes; pages not read yet are sent as images. It runs only when you tap Recap. Attendee email addresses are not sent.</li>
     <li><strong>Brief Me</strong>, in Prepare, sends the meeting's title, day and description, what you noted last time, and the words of tasks that may be related. The description can include meeting links, IDs and passcodes. It runs only when you tap it. Attendee email addresses are not sent. Everything else in Prepare is read on your tablet.</li>
     <li><strong>Share to BooxDay</strong>: what you share from another app stays on your tablet until you choose. Save as Note sends nothing. Find Events and Tasks sends up to 8,000 characters of the text, and the picture if there is one.</li>
-    <li><strong>Voice input</strong>: depending on the voice setting, your recording is sent to OpenRouter to be turned into text, or handled by your tablet's own speech recognition.</li>
+    <li><strong>Voice input</strong>: depending on the voice setting, your tablet handles your recording using its speech recognition, or sends it to OpenRouter if OpenRouter is selected. ChatGPT can format the text after tablet speech recognition.</li>
   </ul>
   <p><strong>Keeping your calendar private with AI features.</strong> Free models may keep what they are sent. You choose: with credit on your OpenRouter account, BooxDay uses paid models, and you can pick the model for each job in AI Settings → AI Models. Turning on Zero Data Retention in your OpenRouter account's <a href="https://openrouter.ai/settings/privacy">privacy settings</a> makes OpenRouter use only providers that keep no copy. BooxDay doesn't change these choices for you.</p>
-  <p>Your OpenRouter key is stored encrypted on the tablet and is never included in backups.</p>
+  <p>Your OpenRouter key and ChatGPT credentials are encrypted on the tablet and excluded from backups. Signing out clears local ChatGPT tokens and attempts to revoke the renewable session with OpenAI. You can also manage access in ChatGPT Settings.</p>
 
   <h2>Files BooxDay saves outside its own storage</h2>
   <p>Only if you turn these on:</p>
@@ -126,7 +127,7 @@
     <li><strong>Update check</strong>: shortly after it starts, BooxDay asks GitHub whether a newer version exists. The request carries only the app version.</li>
     <li><strong>Handwriting recognition</strong> for tasks runs on the tablet. On BOOX tablets it uses the tablet's own handwriting engine, the one BOOX Notes uses; your handwriting is not sent anywhere. The first time that engine is used, BOOX's software may contact BOOX's server to check and register it, with the tablet's model and device identifiers. Where the BOOX engine isn't available, Google's on-device recognition is used; its language models are downloaded from Google the first time.</li>
   </ul>
-  <p>Like any internet request, these connections reveal your IP address to the server you connect to (Google, Microsoft, your calendar server, OpenRouter, GitHub).</p>
+  <p>Like any internet request, these connections reveal your IP address to the server you connect to (Google, Microsoft, your calendar server, OpenRouter, OpenAI, GitHub).</p>
 
   <h2>Keeping and deleting your data</h2>
   <ul>
@@ -138,7 +139,7 @@
   </ul>
 
   <h2>Security</h2>
-  <p>Connections to Google, Microsoft, your calendar server, OpenRouter and GitHub use HTTPS; BooxDay doesn't connect to a calendar server over plain http. Sign-in tokens are kept by Google Play services and Microsoft's sign-in library, and BooxDay stores your keys and calendar passwords in encrypted storage on the tablet.</p>
+  <p>Connections to Google, Microsoft, your calendar server, OpenRouter, OpenAI and GitHub use HTTPS; BooxDay doesn't connect to a calendar server over plain http. Sign-in tokens are kept by Google Play services and Microsoft's sign-in library, and BooxDay stores your keys and calendar passwords in encrypted storage on the tablet.</p>
 
   <h2>Children</h2>
   <p>BooxDay is not directed at children under 13.</p>

@@ -2,6 +2,7 @@ package com.boox.day.ai
 
 import android.util.Log
 import com.boox.day.api.ModelConfigProvider
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.api.ai.AiModel
 import com.boox.day.api.ai.AiResponse
 import com.boox.day.api.ai.aiRequest
@@ -9,6 +10,7 @@ import com.boox.day.data.model.ParsedEventData
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.google.gson.annotations.SerializedName
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -77,9 +79,9 @@ object VoiceEventParser {
         currentDate: LocalDate = LocalDate.now(),
         mimeType: String = "audio/wav",
         onStageChange: (String) -> Unit
-    ): ParsedEventData {
+    ): ParsedEventData = withContext(AiProvider.capture()) {
         if (audioBase64.isBlank()) {
-            return ParsedEventData.empty("No audio recorded")
+            return@withContext ParsedEventData.empty("No audio recorded")
         }
 
         Log.d(TAG, "Parsing audio input (${audioBase64.length} chars base64)")
@@ -106,25 +108,24 @@ object VoiceEventParser {
         val rawTranscript = when (val response = transcriptionResponse) {
             is AiResponse.Success -> {
                 val transcript = response.data.trim()
-                Log.d(TAG, "Stage 1 complete: Raw transcript = '$transcript'")
                 transcript
             }
             is AiResponse.Error.RateLimitError -> {
                 Log.w(TAG, "Stage 1: Rate limited")
-                return ParsedEventData.empty("Service busy, please try again")
+                return@withContext ParsedEventData.empty("Service busy, please try again")
             }
             is AiResponse.Error.NetworkError -> {
                 Log.e(TAG, "Stage 1: Network error: ${response.message}")
-                return ParsedEventData.empty("No internet connection")
+                return@withContext ParsedEventData.empty("No internet connection")
             }
             is AiResponse.Error -> {
                 Log.e(TAG, "Stage 1: AI error: ${response.message}")
-                return ParsedEventData.empty("Could not transcribe audio: ${response.message}")
+                return@withContext ParsedEventData.empty("Could not transcribe audio: ${response.message}")
             }
         }
 
         if (rawTranscript.isBlank()) {
-            return ParsedEventData.empty("No speech detected")
+            return@withContext ParsedEventData.empty("No speech detected")
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -152,7 +153,7 @@ object VoiceEventParser {
         val modelsToTry = getReasoningModels()
         val eventParsingPrompt = buildEventParsingPrompt(currentDate)
 
-        return when (val result = AiRetryExecutor.execute(
+        return@withContext when (val result = AiRetryExecutor.execute(
             models = modelsToTry,
             buildRequest = { model ->
                 aiRequest {
@@ -167,9 +168,7 @@ object VoiceEventParser {
                 }
             },
             processResponse = { response, model ->
-                Log.d(TAG, "Stage 3 raw response: ${response.data}")
                 val parsed = parseJsonResponse(response.data, correctedText)
-                Log.d(TAG, "Stage 3 parsed result: title='${parsed.title}', attendees=${parsed.attendees}")
                 if (parsed.title.isNotBlank()) parsed else null
             }
         )) {
@@ -445,12 +444,10 @@ Remember: The user is counting on you to be SMART. Fill in the gaps intelligentl
         transcribedText: String,
         currentDate: LocalDate = LocalDate.now(),
         onStageChange: (String) -> Unit = {}
-    ): ParsedEventData {
+    ): ParsedEventData = withContext(AiProvider.capture()) {
         if (transcribedText.isBlank()) {
-            return ParsedEventData.empty("No speech detected")
+            return@withContext ParsedEventData.empty("No speech detected")
         }
-
-        Log.d(TAG, "parseTranscribedText: '${transcribedText.take(100)}...'")
 
         // ─────────────────────────────────────────────────────────────────────
         // STAGE 1: SKIPPED - TranscriptionService already transcribed
@@ -480,7 +477,7 @@ Remember: The user is counting on you to be SMART. Fill in the gaps intelligentl
         val modelsToTry = getReasoningModels()
         val eventParsingPrompt = buildEventParsingPrompt(currentDate)
 
-        return when (val result = AiRetryExecutor.execute(
+        return@withContext when (val result = AiRetryExecutor.execute(
             models = modelsToTry,
             buildRequest = { model ->
                 aiRequest {
@@ -495,7 +492,6 @@ Remember: The user is counting on you to be SMART. Fill in the gaps intelligentl
                 }
             },
             processResponse = { response, model ->
-                Log.d(TAG, "Stage 3 raw response: ${response.data}")
                 val parsed = parseJsonResponse(response.data, correctedText)
                 Log.d(TAG, "Stage 3 parsed: title='${parsed.title}'")
                 if (parsed.title.isNotBlank()) parsed else null
@@ -517,9 +513,9 @@ Remember: The user is counting on you to be SMART. Fill in the gaps intelligentl
     suspend fun parseVoiceInput(
         transcript: String,
         currentDate: LocalDate = LocalDate.now()
-    ): ParsedEventData {
+    ): ParsedEventData = withContext(AiProvider.capture()) {
         if (transcript.isBlank()) {
-            return ParsedEventData.empty("No speech detected")
+            return@withContext ParsedEventData.empty("No speech detected")
         }
 
         Log.d(TAG, "Text mode - Stage 1: Refining transcript...")
@@ -537,7 +533,7 @@ Remember: The user is counting on you to be SMART. Fill in the gaps intelligentl
         val modelsToTry = getReasoningModels()
         val eventParsingPrompt = buildEventParsingPrompt(currentDate)
 
-        return when (val result = AiRetryExecutor.execute(
+        return@withContext when (val result = AiRetryExecutor.execute(
             models = modelsToTry,
             buildRequest = { model ->
                 aiRequest {

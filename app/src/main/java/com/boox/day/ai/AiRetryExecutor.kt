@@ -9,6 +9,7 @@ import com.boox.day.api.ai.AiProblem
 import com.boox.day.api.ai.AiRequest
 import com.boox.day.api.ai.AiResponse
 import com.boox.day.api.ai.AiClient
+import com.boox.day.api.ai.AiProvider
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
@@ -69,6 +70,11 @@ object AiRetryExecutor {
             return RetryResult.Failure(SERVICE_UNAVAILABLE_MESSAGE, "No models configured")
         }
 
+        if (models.any { it is AiModel.ChatGpt } && models.size != 1) {
+            return RetryResult.Failure("Choose one ChatGPT model in AI Settings.", "Invalid provider routing")
+        }
+        val isChatGpt = models.first() is AiModel.ChatGpt
+        val selection = AiProvider.capture()
         var lastError: String? = null
         // What the user is told if every attempt fails (Oct 2026: no Wi-Fi, OpenRouter down or a
         // model's bad answer all said "temporarily unavailable" before)
@@ -76,7 +82,7 @@ object AiRetryExecutor {
         var totalAttempts = 0
         var creditRefusal: AiResponse.Error.OutOfCredit? = null
         // No credit: one pass, to save the free models' daily allowance
-        var cycles = if (OpenRouterAccount.isFreeOnly()) 1 else MAX_CYCLES
+        var cycles = if (isChatGpt || OpenRouterAccount.isFreeOnly()) 1 else MAX_CYCLES
 
         for (cycle in 1..MAX_CYCLES) {
             if (cycle > cycles) break
@@ -94,7 +100,7 @@ object AiRetryExecutor {
 
                 val request = buildRequest(model)
 
-                when (val response = send(request, true)) {
+                when (val response = kotlinx.coroutines.withContext(selection) { send(request, true) }) {
                     is AiResponse.Success -> {
                         val result = processResponse(response, model)
                         if (result != null) {
@@ -121,6 +127,8 @@ object AiRetryExecutor {
                         lastError = "Network error"
                         lastProblem = AiProblem.of(response)
                     }
+                    is AiResponse.Error.RouteChanged -> return RetryResult.Failure(response.message, "Provider changed")
+                    is AiResponse.Error.ChatGpt -> return RetryResult.Failure(response.message, response.problem.name)
                     is AiResponse.Error.ServiceUnavailable -> {
                         Log.w(TAG, "${model.displayName} service unavailable")
                         return RetryResult.Failure(response.message, "Service unavailable")
@@ -190,13 +198,19 @@ object AiRetryExecutor {
         promptForKey: Boolean = true,
         buildRequest: (AiModel) -> AiRequest
     ): AiResponse<String> {
+        if (models.any { it is AiModel.ChatGpt } && models.size != 1) {
+            return AiResponse.Error.InvalidRequest("Choose one ChatGPT model in AI Settings.")
+        }
+        val selection = AiProvider.capture()
         var creditRefusal: AiResponse.Error.OutOfCredit? = null
         var lastError: AiResponse.Error = AiResponse.Error.ApiError(null, SERVICE_UNAVAILABLE_MESSAGE)
         for (model in models) {
             coroutineContext.ensureActive()
             if (creditRefusal != null && !OpenRouterAccount.isFreeModel(model.id)) continue
-            when (val response = send(buildRequest(model), promptForKey)) {
+            when (val response = kotlinx.coroutines.withContext(selection) { send(buildRequest(model), promptForKey) }) {
                 is AiResponse.Success -> return response
+                is AiResponse.Error.RouteChanged,
+                is AiResponse.Error.ChatGpt,
                 is AiResponse.Error.NoApiKey,
                 is AiResponse.Error.KeyRejected -> return response
                 is AiResponse.Error.OutOfCredit -> {

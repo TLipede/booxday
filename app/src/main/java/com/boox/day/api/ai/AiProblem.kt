@@ -47,6 +47,28 @@ enum class AiProblem(val message: String, val shortText: String, val indexingWai
     KEY_REJECTED(AiResponse.Error.KeyRejected().message, "OpenRouter key not accepted", indexingWaits = true),
     NO_CREDIT(AiResponse.Error.OutOfCredit.NO_CREDIT_MESSAGE, "no OpenRouter credit", indexingWaits = true),
 
+    ROUTE_CHANGED(AiResponse.Error.RouteChanged().message, "AI connection changed", indexingWaits = true),
+    CHATGPT_CONNECTION(
+        "Check your ChatGPT connection and plan permission in AI Settings.",
+        "ChatGPT connection needs attention",
+        indexingWaits = true
+    ),
+    CHATGPT_UNAVAILABLE(
+        "Can't complete the request with ChatGPT right now. Try again later.",
+        "ChatGPT is unavailable",
+        indexingWaits = true
+    ),
+    CHATGPT_LIMIT(
+        "ChatGPT cannot accept more requests right now. Check Manage usage in AI Settings.",
+        "ChatGPT usage is limited",
+        indexingWaits = true
+    ),
+    CHATGPT_INDEXING_PAUSED(
+        "Handwriting indexing requires OpenRouter’s zero data retention routing. It is paused while ChatGPT is selected.",
+        "handwriting indexing is paused for ChatGPT",
+        indexingWaits = true
+    ),
+
     /** The AI Features switch is off (Oct 2026): nothing goes to OpenRouter, page reading included */
     AI_OFF(
         "AI Features is off. Turn it on in Settings → AI Settings.",
@@ -71,6 +93,8 @@ enum class AiProblem(val message: String, val shortText: String, val indexingWai
     companion object {
 
         fun of(error: AiResponse.Error, network: NetworkState = NetworkStatus.current()): AiProblem = when (error) {
+            is AiResponse.Error.RouteChanged -> ROUTE_CHANGED
+            is AiResponse.Error.ChatGpt -> error.problem
             is AiResponse.Error.NetworkError -> connectionProblem(network, error.cause)
             is AiResponse.Error.RateLimitError -> OPENROUTER_BUSY
             is AiResponse.Error.ServiceUnavailable -> OPENROUTER_DOWN
@@ -89,6 +113,7 @@ enum class AiProblem(val message: String, val shortText: String, val indexingWai
 
         /** The text to show for [error]: key and credit errors keep their own, more specific words. */
         fun messageFor(error: AiResponse.Error, network: NetworkState = NetworkStatus.current()): String = when (error) {
+            is AiResponse.Error.ChatGpt,
             is AiResponse.Error.NoApiKey,
             is AiResponse.Error.KeyRejected,
             is AiResponse.Error.OutOfCredit -> error.message

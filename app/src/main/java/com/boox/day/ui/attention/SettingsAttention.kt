@@ -17,7 +17,7 @@ import com.boox.day.booxnotes.BooxNotesAccess
 import com.boox.day.data.datastore.GlobalAppSettings
 import com.boox.day.notifications.NotificationChannelManager
 import com.boox.day.notifications.NotificationPermissionHelper
-import com.boox.day.security.UserOpenRouterKey
+import com.boox.day.api.ai.AiProvider
 
 /** The Settings menu entries that can need the user (Oct 2026, plan B3; Task Sync added P4-A). */
 enum class SettingsPlace { PREFERENCES, TASK_SYNC, CALENDAR_ACCOUNTS, AI_SETTINGS, BOOX_NOTES }
@@ -68,7 +68,8 @@ data class AttentionInputs(
     val booxNotesAccess: Boolean,
     val accountsToReconnect: Int,
     /** Task sync needs the user (sign in again, deletes to approve): why; null when it doesn't. */
-    val taskSyncNeeds: String? = null
+    val taskSyncNeeds: String? = null,
+    val aiProvider: AiProvider = AiProvider.OPENROUTER
 )
 
 object SettingsAttentionRules {
@@ -87,7 +88,9 @@ object SettingsAttentionRules {
                 add(AttentionItem(SettingsPlace.CALENDAR_ACCOUNTS, if (accountsToReconnect == 1) "An account needs to reconnect" else "$accountsToReconnect accounts need to reconnect"))
             }
             if (aiEnabled && !hasKey) {
-                add(AttentionItem(SettingsPlace.AI_SETTINGS, "Connect OpenRouter, or turn AI Features off"))
+                val message = if (aiProvider == AiProvider.OPENROUTER) "Connect OpenRouter, or turn AI Features off"
+                else "Connect ChatGPT and choose a model in AI Settings"
+                add(AttentionItem(SettingsPlace.AI_SETTINGS, message))
             } else if (aiEnabled && failingPicks > 0) {
                 add(AttentionItem(SettingsPlace.AI_SETTINGS, "A model you picked isn't working"))
             }
@@ -114,8 +117,8 @@ fun rememberSettingsAttention(accountsToReconnect: Int): SettingsAttention {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val settings = GlobalAppSettings.current
-    val hasKey = UserOpenRouterKey.hasKey
-    val failingPicks = AiPickStatus.failures.size
+    val hasKey = AiProvider.ready
+    val failingPicks = if (settings.aiProvider == AiProvider.OPENROUTER) AiPickStatus.failures.size else 0
     // Task Sync's needs change with its runs, also while BooxDay stays in front
     val taskSyncStatus by com.boox.day.tasksync.TaskSync.statusChanges.collectAsState()
     return remember(settings, hasKey, failingPicks, accountsToReconnect, resumes, taskSyncStatus) {
@@ -133,6 +136,7 @@ private fun inputsFor(context: Context, accountsToReconnect: Int, hasKey: Boolea
             (!eventsOn || NotificationChannelManager.isChannelEnabled(context, NotificationChannelManager.CHANNEL_ID_EVENT_REMINDERS)))
     return AttentionInputs(
         aiEnabled = settings.aiEnabled,
+        aiProvider = settings.aiProvider,
         hasKey = hasKey,
         failingPicks = failingPicks,
         remindersOn = remindersOn,

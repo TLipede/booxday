@@ -30,6 +30,13 @@ sealed class AiResponse<out T> {
     sealed class Error : AiResponse<Nothing>() {
         abstract val message: String
 
+        data class RouteChanged(
+            override val message: String = "Your AI provider or connection changed. Start the action again."
+        ) : Error()
+
+        /** A ChatGPT request stopped with a provider-specific message. */
+        data class ChatGpt(override val message: String, val problem: AiProblem, val status: Int? = null) : Error()
+
         /** API returned an error (non-2xx response or error in body) */
         data class ApiError(
             val code: Int?,

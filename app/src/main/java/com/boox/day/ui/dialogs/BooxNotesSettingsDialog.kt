@@ -108,7 +108,7 @@ fun BooxNotesSettingsDialog(
     val settingsPage = BooxNotesPlaces.settingsPage
 
     // Pages are read by AI on the user's own OpenRouter key (Oct 2026); without one indexing waits
-    val isStandaloneWithoutOcrKey = !com.boox.day.security.UserOpenRouterKey.hasKey
+    val isStandaloneWithoutOcrKey = !com.boox.day.api.ai.AiProvider.openRouterAvailable
 
     // Check current permission status
     var hasPermission by remember {
@@ -348,7 +348,7 @@ private fun BooxNotesSetupSteps(
         calendarState = calendar?.state,
         ocrOn = settings.ocrSettings.enabled,
         aiOn = settings.aiEnabled,
-        hasKey = com.boox.day.security.UserOpenRouterKey.hasKey,
+        hasKey = com.boox.day.api.ai.AiProvider.openRouterAvailable,
         onRequestAccess = onRequestAccess,
         onCheckNow = onCheckNow,
         onOpenCalendarAccounts = onOpenCalendarAccounts,
@@ -601,7 +601,9 @@ internal fun OcrSettingsSection(
                         tint = EInkTheme.Colors.darkGray
                     )
                     Text(
-                        text = "OpenRouter Key Needed",
+                        text = if (com.boox.day.api.ai.AiProvider.current == com.boox.day.api.ai.AiProvider.CHATGPT)
+                            "Handwriting indexing paused"
+                        else "OpenRouter Key Needed",
                         fontSize = EInkTheme.Typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = EInkTheme.Colors.darkGray
@@ -609,7 +611,9 @@ internal fun OcrSettingsSection(
                 }
                 Spacer(modifier = Modifier.height(EInkTheme.Global.spacingSmall))
                 Text(
-                    text = "Pages are read by AI on your own OpenRouter key. Add one in AI Settings to read new pages. Pages already read stay searchable, and suggestions still work.",
+                    text = if (com.boox.day.api.ai.AiProvider.current == com.boox.day.api.ai.AiProvider.CHATGPT)
+                        "Select OpenRouter in AI Settings to resume private background page reading. Previously indexed pages stay searchable."
+                    else "Pages are read by AI on your own OpenRouter key. Add one in AI Settings to read new pages. Pages already read stay searchable, and suggestions still work.",
                     fontSize = EInkTheme.Preferences.explanationFontSize,
                     color = EInkTheme.Colors.gray
                 )

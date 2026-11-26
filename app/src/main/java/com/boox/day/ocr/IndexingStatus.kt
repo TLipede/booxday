@@ -21,6 +21,10 @@ object IndexingStatus {
         _waitingFor.value = problem
     }
 
+    fun clearChatGptPause() {
+        _waitingFor.compareAndSet(AiProblem.CHATGPT_INDEXING_PAUSED, null)
+    }
+
     fun onPageRead() {
         _waitingFor.value = null
     }

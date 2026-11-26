@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.boox.day.security.UserOpenRouterKey
+import com.boox.day.api.ai.AiProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -297,10 +298,13 @@ object OpenRouterModelCatalog {
      */
     fun init(context: Context) {
         appContext = context.applicationContext
+        scope.launch { loadCache() }
+    }
+
+    fun onSettingsLoaded() {
         scope.launch {
-            loadCache()
             UserOpenRouterKey.ensureLoaded()
-            if (UserOpenRouterKey.hasKey && isStale()) refresh(force = false)
+            if (AiProvider.openRouterAvailable && isStale()) refresh(force = false)
         }
     }
 
@@ -339,6 +343,7 @@ object OpenRouterModelCatalog {
     /** Downloads the list (when stale, or always with [force]). Off the main thread. */
     suspend fun refresh(force: Boolean): Boolean = withContext(Dispatchers.IO) {
         refreshLock.withLock {
+            if (!AiProvider.allows(AiProvider.OPENROUTER)) return@withLock false
             if (!force && !isStale()) return@withLock true
             loading = true
             error = null
@@ -351,7 +356,7 @@ object OpenRouterModelCatalog {
                 }
                 val models = parseModels(get(MODELS_URL, null), zdrIds)
                 if (models.isEmpty()) throw IllegalStateException("empty list")
-                val key = UserOpenRouterKey.value
+                val key = UserOpenRouterKey.value.takeIf { AiProvider.allows(AiProvider.OPENROUTER) }
                 // Preserve valid empty allowlists (distinct from null = unknown/no-key/failed)
                 val allowed = if (key.isNullOrBlank()) null else runCatching {
                     parseIds(get(USER_MODELS_URL, key), "id").toList()

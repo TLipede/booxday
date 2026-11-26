@@ -22,8 +22,14 @@ import kotlinx.coroutines.withTimeoutOrNull
  * comes first: with it off nothing goes to OpenRouter, so a missing key or the monthly limit is not
  * the reason to show. [withinMonthlyLimit] is only asked when the rest allow a read.
  */
-internal fun aiReadWaitReason(aiEnabled: Boolean, hasKey: Boolean, withinMonthlyLimit: () -> Boolean): AiProblem? = when {
+internal fun aiReadWaitReason(
+    aiEnabled: Boolean,
+    hasKey: Boolean,
+    provider: com.boox.day.api.ai.AiProvider = com.boox.day.api.ai.AiProvider.OPENROUTER,
+    withinMonthlyLimit: () -> Boolean
+): AiProblem? = when {
     !aiEnabled -> AiProblem.AI_OFF
+    provider == com.boox.day.api.ai.AiProvider.CHATGPT -> AiProblem.CHATGPT_INDEXING_PAUSED
     !hasKey -> AiProblem.NO_KEY
     !withinMonthlyLimit() -> AiProblem.MONTHLY_LIMIT
     else -> null
@@ -194,6 +200,7 @@ class UnifiedOcrPipeline(private val context: Context) {
         val waitReason = aiReadWaitReason(
             aiEnabled = com.boox.day.data.datastore.GlobalAppSettings.current.aiEnabled,
             hasKey = com.boox.day.security.UserOpenRouterKey.hasKey,
+            provider = com.boox.day.api.ai.AiProvider.current,
             withinMonthlyLimit = { quotaManager.canReadWithAi() }
         )
         if (waitReason != null) {

@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.util.Base64
 import android.util.Log
 import com.boox.day.api.ModelConfigProvider
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.api.ai.AiModel
 import com.boox.day.api.ai.AiResponse
 import com.boox.day.api.ai.aiRequest
@@ -16,9 +17,9 @@ import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -60,7 +61,7 @@ object MemoContextExtractor {
         currentDate: LocalDate,
         pageDataManager: PageDataManager,
         onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }
-    ): MemoContextResult = coroutineScope {
+    ): MemoContextResult = withContext(AiProvider.capture()) {
         Log.d(TAG, "Starting memo context extraction for $currentDate")
 
         // Step 1: Select memo pages
@@ -69,7 +70,7 @@ object MemoContextExtractor {
 
         if (selectedPages.isEmpty()) {
             Log.d(TAG, "No memo pages found for context extraction")
-            return@coroutineScope MemoContextResult(
+            return@withContext MemoContextResult(
                 normalizedText = "",
                 actionItems = emptyList(),
                 keyTopics = emptyList(),
@@ -110,7 +111,7 @@ object MemoContextExtractor {
                             errors.add("OCR failed for ${page.date}: ${e.message}")
                         }
                     } finally {
-                        synchronized(this@coroutineScope) {
+                        synchronized(this@withContext) {
                             completedCount++
                             onProgress(completedCount, selectedPages.size)
                         }
@@ -192,7 +193,6 @@ object MemoContextExtractor {
 
             when (response) {
                 is AiResponse.Success -> {
-                    Log.d(TAG, "OCR success for ${page.date} (attempt $attempt): ${response.data.take(100)}...")
                     return PageOcrResult(
                         pageId = page.pageId,
                         date = page.date,

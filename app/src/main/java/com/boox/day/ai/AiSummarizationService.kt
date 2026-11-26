@@ -7,6 +7,7 @@ import android.graphics.RectF
 import android.util.Base64
 import androidx.compose.ui.geometry.Offset
 import com.boox.day.api.ModelConfigProvider
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.api.ai.AiCapability
 import com.boox.day.api.ai.AiClient
 import com.boox.day.api.ai.AiModel
@@ -16,6 +17,7 @@ import com.boox.day.data.db.Stroke
 import com.boox.day.data.db.TextAnnotation
 import com.boox.day.editor.drawing.drawStroke
 import com.boox.day.utils.TaggedLog
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
@@ -223,11 +225,11 @@ If no readable text: <<<NO_TEXT>>>
     suspend fun summarizeContent(
         content: SummarizationContent,
         onStateChange: (SummarizationState) -> Unit
-    ): SummarizationResult {
+    ): SummarizationResult = withContext(AiProvider.capture()) {
         if (!content.hasContent) {
             log.i("No content to summarize")
             onStateChange(SummarizationState.NoContent("No content on this page to summarize"))
-            return SummarizationResult(
+            return@withContext SummarizationResult(
                 summary = "",
                 wasSuccessful = false,
                 errorMessage = "No content on this page"
@@ -238,7 +240,7 @@ If no readable text: <<<NO_TEXT>>>
 
         try {
             // Determine summarization strategy based on content type
-            return when {
+            return@withContext when {
                 content.hasStrokes && content.hasText -> {
                     // Both: OCR strokes + extract text, then summarize combined
                     summarizeMixedContent(content, onStateChange)
@@ -262,7 +264,7 @@ If no readable text: <<<NO_TEXT>>>
                 else -> "Summarization failed: ${e.message}"
             }
             onStateChange(SummarizationState.Error(errorMessage))
-            return SummarizationResult(
+            return@withContext SummarizationResult(
                 summary = "",
                 wasSuccessful = false,
                 errorMessage = errorMessage
@@ -506,7 +508,6 @@ RULES:
 
         val inferenceResult = TextInferenceService.refineNoteText(rawText)
         if (inferenceResult.wasModified) {
-            log.d("Summarization OCR cleanup refined text: ${inferenceResult.refinedText.take(100)}...")
         }
         return Result.success(inferenceResult.refinedText)
     }
@@ -784,14 +785,14 @@ RULES:
     suspend fun summarizeMultiplePages(
         pages: List<PageSummarizationData>,
         onStateChange: (MultiPageSummarizationState) -> Unit
-    ): SummarizationResult {
+    ): SummarizationResult = withContext(AiProvider.capture()) {
         // Filter to pages with content
         val pagesWithContent = pages.filter { it.hasContent }
 
         if (pagesWithContent.isEmpty()) {
             log.i("No pages with content to summarize")
             onStateChange(MultiPageSummarizationState.NoContent("No content found on any page"))
-            return SummarizationResult(
+            return@withContext SummarizationResult(
                 summary = "",
                 wasSuccessful = false,
                 errorMessage = "No content found on any page"
@@ -833,7 +834,7 @@ RULES:
             if (perPageSummaries.isEmpty()) {
                 log.i("No readable content found across all pages")
                 onStateChange(MultiPageSummarizationState.NoContent(pageFailure ?: "No readable content found on any page"))
-                return SummarizationResult(
+                return@withContext SummarizationResult(
                     summary = "",
                     wasSuccessful = false,
                     errorMessage = pageFailure ?: "No readable content found"
@@ -845,7 +846,7 @@ RULES:
                 val singleSummary = perPageSummaries.first().substringAfter(":\n")
                 log.i("Single page summary: ${singleSummary.length} chars")
                 onStateChange(MultiPageSummarizationState.Success(singleSummary))
-                return SummarizationResult(
+                return@withContext SummarizationResult(
                     summary = singleSummary,
                     wasSuccessful = true,
                     strokeIds = allStrokeIds,
@@ -863,7 +864,7 @@ RULES:
                 val error = aggregatedSummary.exceptionOrNull()?.message ?: "Aggregation failed"
                 log.e("Summary aggregation failed: $error")
                 onStateChange(MultiPageSummarizationState.Error(error))
-                return SummarizationResult(
+                return@withContext SummarizationResult(
                     summary = "",
                     wasSuccessful = false,
                     errorMessage = error
@@ -874,7 +875,7 @@ RULES:
             log.i("Multi-page summarization complete: ${finalSummary.length} chars from ${perPageSummaries.size} pages")
             onStateChange(MultiPageSummarizationState.Success(finalSummary))
 
-            return SummarizationResult(
+            return@withContext SummarizationResult(
                 summary = finalSummary,
                 wasSuccessful = true,
                 strokeIds = allStrokeIds,
@@ -889,7 +890,7 @@ RULES:
                 else -> "Summarization failed: ${e.message}"
             }
             onStateChange(MultiPageSummarizationState.Error(errorMessage))
-            return SummarizationResult(
+            return@withContext SummarizationResult(
                 summary = "",
                 wasSuccessful = false,
                 errorMessage = errorMessage

@@ -375,7 +375,7 @@ private fun AiFeaturesHighlight(modifier: Modifier = Modifier) {
         // Feature bullets (condensed to 2)
         HighlightBullet("Smart Suggestions and Optimize My Day, from your calendar and notes")
         Spacer(modifier = Modifier.height(6.dp))
-        HighlightBullet("Run on your own OpenRouter account, added in AI Settings")
+        HighlightBullet("Connect OpenRouter or a ChatGPT plan in AI Settings")
     }
 }
 

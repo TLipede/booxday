@@ -111,28 +111,33 @@ fun CalendarAiNoticePopup(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(EInkTheme.Global.paddingMedium)
                 ) {
-                    NoticeText(
-                        "Optimize My Day, Daily Summary, Weekly Summary and Smart Suggestions send your events (titles, times, " +
-                            "places, descriptions and the email addresses of invited people) with your tasks " +
-                            "and notes to OpenRouter, on your OpenRouter account, and to the company that runs " +
-                            "the AI model. Smart Suggestions and Optimize My Day also send your AI options (how many " +
-                            "suggestions, Vacation, health and social ideas)."
-                    )
-                    NoticeText("Free models may keep what they are sent. To keep your calendar private:")
-                    NoticeStep(
-                        lead = "1. Use paid models.",
-                        detail = " With credit on your OpenRouter account, BooxDay uses paid models. You can " +
-                            "also pick a model in AI Settings → AI Models."
-                    )
-                    NoticeStep(
-                        lead = "2. Turn on Zero Data Retention",
-                        detail = " in your OpenRouter account's privacy settings, so only providers that keep " +
-                            "no copy answer."
-                    )
-                    NoticeLink(text = "openrouter.ai/settings/privacy", icon = true) {
-                        OpenRouterLinks.open(context, OPENROUTER_PRIVACY_URL)
+                    if (com.boox.day.ui.CalendarAiNotice.provider == com.boox.day.api.ai.AiProvider.CHATGPT) {
+                        NoticeText("These AI tools send event details, including titles, times, locations, descriptions and attendee email addresses, along with relevant tasks and notes, to OpenAI using your ChatGPT plan. Smart Suggestions and Optimize My Day also send your AI options.")
+                        NoticeText("BooxDay disables response storage for these requests. OpenAI’s data policies still apply. BooxDay shows this once for ChatGPT.")
+                    } else {
+                        NoticeText(
+                            "Optimize My Day, Daily Summary, Weekly Summary and Smart Suggestions send your events (titles, times, " +
+                                "places, descriptions and the email addresses of invited people) with your tasks " +
+                                "and notes to OpenRouter, on your OpenRouter account, and to the company that runs " +
+                                "the AI model. Smart Suggestions and Optimize My Day also send your AI options (how many " +
+                                "suggestions, Vacation, health and social ideas)."
+                        )
+                        NoticeText("Free models may keep what they are sent. To keep your calendar private:")
+                        NoticeStep(
+                            lead = "1. Use paid models.",
+                            detail = " With credit on your OpenRouter account, BooxDay uses paid models. You can " +
+                                "also pick a model in AI Settings → AI Models."
+                        )
+                        NoticeStep(
+                            lead = "2. Turn on Zero Data Retention",
+                            detail = " in your OpenRouter account's privacy settings, so only providers that keep " +
+                                "no copy answer."
+                        )
+                        NoticeLink(text = "openrouter.ai/settings/privacy", icon = true) {
+                            OpenRouterLinks.open(context, OPENROUTER_PRIVACY_URL)
+                        }
+                        NoticeText("Or keep using free models. BooxDay shows this once.")
                     }
-                    NoticeText("Or keep using free models. BooxDay shows this once.")
                 }
 
                 Row(

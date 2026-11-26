@@ -170,8 +170,11 @@ fun VoiceSettingsDialog(
 
                 // Option 2: AI on OpenRouter, with the model the voice job uses now (Oct 2026: the
                 // title said "Gemini 2.5 AI" whatever the AI Models card had)
+                val openRouterSelected = com.boox.day.api.ai.AiProvider.current == com.boox.day.api.ai.AiProvider.OPENROUTER
                 val voiceModel = ModelConfigProvider.modelInUse(AiJob.VOICE)
-                val geminiStatusText = if (hasGoogleSearchApp) {
+                val geminiStatusText = if (!openRouterSelected) {
+                    "Requires OpenRouter as the selected AI provider"
+                } else if (hasGoogleSearchApp) {
                     "Not used while Google Speech is ready, which is free"
                 } else {
                     "Runs on your own OpenRouter account"
@@ -182,7 +185,7 @@ fun VoiceSettingsDialog(
                 VoiceOptionCard(
                     title = "AI on OpenRouter",
                     isSelected = selectedMode == VoiceTextMode.GEMINI,
-                    isAvailable = !hasGoogleSearchApp,
+                    isAvailable = !hasGoogleSearchApp && openRouterSelected,
                     statusText = geminiStatusText,
                     descriptionText = geminiDescriptionText,
                     showInstallButton = false,

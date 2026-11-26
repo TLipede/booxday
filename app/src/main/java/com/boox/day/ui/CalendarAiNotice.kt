@@ -7,6 +7,7 @@ import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.boox.day.api.ai.AiProvider
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,7 +23,10 @@ import kotlinx.coroutines.withContext
  */
 object CalendarAiNotice {
     private const val PREFS = "calendar_ai_notice"
-    private const val KEY_SEEN = "seen"
+    private fun seenKey(provider: AiProvider) = if (provider == AiProvider.OPENROUTER) "seen" else "seen_chatgpt"
+
+    var provider by mutableStateOf(AiProvider.OPENROUTER)
+        private set
 
     var isOpen by mutableStateOf(false)
         private set
@@ -35,28 +39,32 @@ object CalendarAiNotice {
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     }
 
-    private val seen: Boolean get() = prefs?.getBoolean(KEY_SEEN, false) ?: false
+    private fun seen(provider: AiProvider): Boolean = prefs?.getBoolean(seenKey(provider), false) ?: false
 
     /** Runs [action] now when the notice was seen, otherwise after Continue. Main thread. */
     fun afterNotice(action: () -> Unit) {
-        if (seen) {
+        val selected = AiProvider.current
+        if (seen(selected)) {
             action()
             return
         }
         pendingAnswer?.complete(false)
         pendingAnswer = null
         pendingAction = action
+        provider = selected
         isOpen = true
     }
 
     /** True at once when the notice was seen; otherwise shows it and waits: true for Continue. */
     suspend fun awaitAllowed(): Boolean {
-        if (seen) return true
+        val selected = AiProvider.current
+        if (seen(selected)) return true
         val answer = CompletableDeferred<Boolean>()
         withContext(Dispatchers.Main) {
             pendingAnswer?.complete(false)
             pendingAction = null
             pendingAnswer = answer
+            provider = selected
             isOpen = true
         }
         return answer.await()
@@ -64,8 +72,11 @@ object CalendarAiNotice {
 
     /** Continue: remember it and go on with the feature. */
     fun onContinue() {
-        prefs?.edit()?.putBoolean(KEY_SEEN, true)?.apply()
-        close(allowed = true)
+        val selected = provider
+        if (selected == AiProvider.current) {
+            prefs?.edit()?.putBoolean(seenKey(selected), true)?.apply()
+            close(allowed = true)
+        } else close(allowed = false)
     }
 
     /** Not Now, or AI Settings: the feature doesn't run; the notice shows again next time. */

@@ -413,7 +413,7 @@ fun SharedToolbar(
         val strokeCount = handwritingRecognitionRequest?.strokes?.size ?: 0
         // Without the user's own OpenRouter key, or with AI Features off, the tablet reads any length
         // (Oct 2026): the selection bar's AI Recognize stays usable and sends nothing
-        if (strokeCount <= 60 || !com.boox.day.security.UserOpenRouterKey.hasKey ||
+        if (strokeCount <= 60 || !com.boox.day.api.ai.AiProvider.ready ||
             !GlobalAppSettings.current.aiEnabled
         ) {
             RecognitionModelConfig.DIGITAL_INK  // Fast on-device for sentences/paragraphs

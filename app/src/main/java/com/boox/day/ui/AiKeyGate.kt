@@ -6,8 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.boox.day.api.ai.AiProblem
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.data.datastore.GlobalAppSettings
-import com.boox.day.security.UserOpenRouterKey
 
 /**
  * AI features run only on the user's own OpenRouter key (Oct 2026). Every AI entry point calls
@@ -67,7 +67,7 @@ object AiKeyGate {
             )
             return false
         }
-        if (UserOpenRouterKey.hasKey) return true
+        if (AiProvider.ready) return true
         pendingAction = resume
         open(Reason.NO_KEY)
         return false
@@ -83,7 +83,17 @@ object AiKeyGate {
 
     /** Opens the popup; safe from any thread. */
     fun open(reason: Reason) {
-        onMain { openReason = reason }
+        onMain {
+            if (AiProvider.current == AiProvider.CHATGPT) {
+                SnackState.globalSnackFlow.tryEmit(SnackConf(
+                    text = "Connect ChatGPT and choose a model in AI Settings, then try again.",
+                    duration = SnackConf.DURATION_STANDARD
+                ))
+                requestOpenAiSettings()
+            } else {
+                openReason = reason
+            }
+        }
     }
 
     /** Not Now: the popup closes and the waiting feature is dropped. */
@@ -148,7 +158,7 @@ object AiKeyGate {
         shownResult = null
         val action = pendingAction
         pendingAction = null
-        if (resume && UserOpenRouterKey.hasKey) action?.invoke()
+        if (resume && GlobalAppSettings.current.aiEnabled && AiProvider.openRouterAvailable) action?.invoke()
     }
 
     /** Connect Again after a failed connection: the result popup closes, the feature keeps waiting. */

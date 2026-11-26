@@ -252,7 +252,14 @@ internal fun SettingsDialogsHost(
             aiEnabled = aiEnabled,
             onAiEnabledChanged = { newValue ->
                 appRepository.kvProxy.setAppSettings(GlobalAppSettings.current.copy(aiEnabled = newValue))
+                if (newValue) com.boox.day.api.OpenRouterModelCatalog.onSettingsLoaded()
                 SetupChecklistStore.mark(context) { it.copy(aiSettingsReviewed = true) }
+            },
+            onProviderChanged = { provider ->
+                appRepository.kvProxy.setAppSettings(GlobalAppSettings.current.copy(aiProvider = provider))
+                if (provider == com.boox.day.api.ai.AiProvider.OPENROUTER) {
+                    com.boox.day.api.OpenRouterModelCatalog.onSettingsLoaded()
+                }
             }
         )
     }

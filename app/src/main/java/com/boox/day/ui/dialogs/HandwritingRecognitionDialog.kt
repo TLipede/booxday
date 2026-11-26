@@ -204,10 +204,10 @@ fun HandwritingRecognitionDialog(
                         )
                         // Read on the tablet because AI Features is off or no OpenRouter key is saved (Oct 2026)
                         val aiOff = !com.boox.day.data.datastore.GlobalAppSettings.current.aiEnabled
-                        if (aiOff || !com.boox.day.security.UserOpenRouterKey.hasKey) {
+                        if (aiOff || !com.boox.day.api.ai.AiProvider.ready) {
                             Text(
                                 text = if (aiOff) "Read on the tablet, because AI Features is off."
-                                    else "Read on the tablet. Add an OpenRouter key in AI Settings for better results.",
+                                    else "Read on the tablet. Connect your AI provider and choose a model in AI Settings for better results.",
                                 fontSize = EInkTheme.Typography.bodySmall,
                                 color = EInkTheme.Colors.darkGray
                             )
