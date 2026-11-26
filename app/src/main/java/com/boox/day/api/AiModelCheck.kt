@@ -65,7 +65,7 @@ object AiModelCheck {
             userMessageWithImage("Read the text in this picture:", picture())
             jsonSchema("ocr_text", StructuredOutputSchemas.ocrTextSchema)
         }
-        // As OpenRouterOcrService reads a page: providers that keep no copy, no reasoning
+        // As HandwritingIndexingService reads a page: providers that keep no copy, no reasoning
         AiJob.SEARCH_INDEXING -> aiRequest {
             model(model)
             systemPrompt(READ_PROMPT)

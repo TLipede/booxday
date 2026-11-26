@@ -47,14 +47,17 @@ object AiClient {
     suspend fun execute(request: AiRequest, promptForKey: Boolean = true, notePick: Boolean = true): AiResponse<String> {
         val provider = if (request.model is AiModel.ChatGpt) AiProvider.CHATGPT else AiProvider.OPENROUTER
         val selection = AiProvider.capture()
-        val allowed = { AiProvider.allows(provider) && selection.allows(provider) }
+        val allowed = {
+            AiProvider.allows(provider) && selection.allows(provider) &&
+                (!request.handwritingIndexing || com.boox.day.data.datastore.GlobalAppSettings.current.ocrSettings.enabled)
+        }
         if (!com.boox.day.data.datastore.GlobalAppSettings.current.aiEnabled) {
             return AiResponse.Error.ServiceUnavailable(AiProblem.AI_OFF.message)
         }
         if (!com.boox.day.data.datastore.GlobalAppSettings.loaded) {
             return AiResponse.Error.ServiceUnavailable("AI Settings are loading. Try again.")
         }
-        if (!allowed()) return routeChanged(request)
+        if (!allowed()) return AiResponse.Error.RouteChanged()
         val model = request.model
         val result = if (model is AiModel.ChatGpt) {
             val response = ChatGptProvider.session?.execute(model, request, allowed)
@@ -81,7 +84,7 @@ object AiClient {
     ): AiResponse<String> {
         // The key may still be loading if this runs right after the app started.
         withContext(Dispatchers.IO) { UserOpenRouterKey.ensureLoaded() }
-        if (!allowed()) return routeChanged(request)
+        if (!allowed()) return AiResponse.Error.RouteChanged()
         if (!OpenRouterClient.hasApiKey()) {
             if (promptForKey) AiKeyGate.open(AiKeyGate.Reason.NO_KEY)
             return AiResponse.Error.NoApiKey()
@@ -108,7 +111,7 @@ object AiClient {
                 cause = e
             )
         }
-        if (!allowed()) return routeChanged(request)
+        if (!allowed()) return AiResponse.Error.RouteChanged()
         if (result is AiResponse.Error.KeyRejected && promptForKey) {
             AiKeyGate.open(AiKeyGate.Reason.KEY_REJECTED)
         }
@@ -117,13 +120,6 @@ object AiClient {
         if (notePick) com.boox.day.api.AiPickStatus.noteResult(request.model, result)
         return result
     }
-
-    private fun routeChanged(request: AiRequest): AiResponse.Error =
-        if (request.zeroDataRetention && AiProvider.current == AiProvider.CHATGPT) {
-            chatGptError(AiProblem.CHATGPT_INDEXING_PAUSED.message, AiProblem.CHATGPT_INDEXING_PAUSED)
-        } else {
-            AiResponse.Error.RouteChanged()
-        }
 
     /**
      * What a paid model's answer says about the account's credit (Oct 2026): a refusal for credit
@@ -367,10 +363,11 @@ object AiClient {
             request.jsonOutput -> listed.supportsJson
             else -> false
         }
-        val providerConfig = if (request.zeroDataRetention || strictRouting) {
-            if (request.zeroDataRetention) Log.d(TAG, "Zero data retention providers only")
+        val requiresZdr = request.zeroDataRetention || request.handwritingIndexing
+        val providerConfig = if (requiresZdr || strictRouting) {
+            if (requiresZdr) Log.d(TAG, "Zero data retention providers only")
             ProviderConfig(
-                zdr = true.takeIf { request.zeroDataRetention },
+                zdr = true.takeIf { requiresZdr },
                 requireParameters = true.takeIf { strictRouting }
             )
         } else {

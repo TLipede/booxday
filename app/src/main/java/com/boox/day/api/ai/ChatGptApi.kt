@@ -255,7 +255,7 @@ internal class ChatGptApi(
             "subscription_sharing_user_not_eligible" ->
                 chatGptError("This ChatGPT account or workspace is ineligible for plan usage.", AiProblem.CHATGPT_CONNECTION, status)
             "subscription_sharing_unsupported_capability" ->
-                chatGptError("The selected ChatGPT model does not support this input or output format.", status = status)
+                chatGptError(AiProblem.CHATGPT_MODEL_UNSUPPORTED.message, AiProblem.CHATGPT_MODEL_UNSUPPORTED, status)
             "subscription_sharing_usage_unavailable", "subscription_sharing_user_unavailable" ->
                 chatGptError(AiProblem.CHATGPT_UNAVAILABLE.message, AiProblem.CHATGPT_UNAVAILABLE, status)
             "subscription_sharing_invalid_user", "chatpass_v2_scope_not_authorized", "chatpass_v2_invalid_authorization_context" ->

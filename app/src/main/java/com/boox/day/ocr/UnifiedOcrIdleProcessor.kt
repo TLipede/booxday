@@ -9,8 +9,6 @@ import com.boox.day.data.datastore.GlobalAppSettings
 import com.boox.day.data.db.UnifiedOcrRepository
 import com.boox.day.ocr.model.OcrSource
 import com.boox.day.api.ai.AiProvider
-import com.boox.day.api.ai.AiProblem
-import com.boox.day.security.UserOpenRouterKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -162,10 +160,11 @@ class UnifiedOcrIdleProcessor(private val context: Context) {
      * @return true if processing started, false if conditions not met
      */
     suspend fun tryProcessIfIdle(lastUserActivityMs: Long): Boolean {
-        if (AiProvider.current == AiProvider.CHATGPT) {
-            val problem = if (GlobalAppSettings.current.aiEnabled) AiProblem.CHATGPT_INDEXING_PAUSED else AiProblem.AI_OFF
-            IndexingStatus.onWaiting(problem)
-            return false
+        if (GlobalAppSettings.current.ocrSettings.enabled && AiProvider.current == AiProvider.CHATGPT) {
+            currentAiReadWaitReason { true }?.let { problem ->
+                IndexingStatus.onWaiting(problem)
+                return false
+            }
         }
         IndexingStatus.clearChatGptPause()
         // Battery: a pass in this idle period already found no work - rest instead of starting
@@ -175,7 +174,7 @@ class UnifiedOcrIdleProcessor(private val context: Context) {
                 lastUserActivityMs = lastUserActivityMs,
                 nowMs = System.currentTimeMillis(),
                 waitingForKey = noWorkPassWaitingForKey,
-                hasKeyNow = UserOpenRouterKey.hasKey
+                hasKeyNow = AiProvider.ready
             )
         ) {
             return false
@@ -213,7 +212,7 @@ class UnifiedOcrIdleProcessor(private val context: Context) {
      * Bypasses idle check but still respects the OCR config flag and memory/battery.
      */
     suspend fun processNow() {
-        if (!quotaManager.isOcrFeatureEnabled) {
+        if (!quotaManager.isOcrFeatureEnabled || !GlobalAppSettings.current.ocrSettings.enabled) {
             Log.w(TAG, "Cannot process now: OCR disabled in OCR config (${quotaManager.describeAppliedConfig()})")
             return
         }
@@ -432,7 +431,7 @@ class UnifiedOcrIdleProcessor(private val context: Context) {
                         UnifiedOcrPipeline.ProcessResult.BUDGET_EXHAUSTED -> {
                             Log.d(TAG, "Stopping queue processing: budget exhausted while processing ${item.sourceType}/${item.sourceId}/${item.pageId}")
                             // Battery: the next pages wait for the same key or budget - rest like an empty pass
-                            noWorkPassWaitingForKey = !UserOpenRouterKey.hasKey
+                            noWorkPassWaitingForKey = !AiProvider.ready
                             lastNoWorkPassAtMs = System.currentTimeMillis()
                             break
                         }

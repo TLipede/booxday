@@ -54,7 +54,7 @@ object ModelConfigProvider {
         AiJob.VOICE to listOf(GEMINI_31_FLASH_LITE, GEMINI_35_FLASH_LITE),
         AiJob.WRITING to listOf(GPT_6_LUNA, GEMINI_31_FLASH_LITE, GEMINI_38_FLASH),
         AiJob.PLANNING to listOf(GEMINI_38_FLASH, GPT_6_LUNA, GEMINI_31_FLASH_LITE),
-        // Chosen by the 14 Oct 2026 test on real pages (OpenRouterOcrService)
+        // Chosen by the 14 Oct 2026 test on real pages (HandwritingIndexingService)
         AiJob.SEARCH_INDEXING to listOf(GEMINI_31_FLASH_LITE)
     )
 

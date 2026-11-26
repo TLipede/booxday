@@ -8,40 +8,49 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.util.Log
 import com.boox.day.api.ai.AiProblem
+import com.boox.day.api.ai.AiProvider
+import com.boox.day.api.ai.ChatGptProvider
+import com.boox.day.data.datastore.GlobalAppSettings
 import com.boox.day.data.db.UnifiedOcrRepository
 import com.boox.day.ocr.model.OcrSource
 import com.boox.day.ocr.model.UnifiedOcrStatus
 import com.boox.day.ocr.semantic.SemanticGeniusService
 import com.boox.day.ocr.source.OcrBitmapSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * Why a page can't be read with AI right now, or null when it can (Oct 2026). The AI Features switch
- * comes first: with it off nothing goes to OpenRouter, so a missing key or the monthly limit is not
- * the reason to show. [withinMonthlyLimit] is only asked when the rest allow a read.
- */
+/** The reason handwriting indexing must wait, before a page or its quota is touched. */
 internal fun aiReadWaitReason(
     aiEnabled: Boolean,
     hasKey: Boolean,
-    provider: com.boox.day.api.ai.AiProvider = com.boox.day.api.ai.AiProvider.OPENROUTER,
+    provider: AiProvider = AiProvider.OPENROUTER,
+    chatGptOptIn: Boolean = false,
+    chatGptUsageLimited: Boolean = false,
     withinMonthlyLimit: () -> Boolean
 ): AiProblem? = when {
     !aiEnabled -> AiProblem.AI_OFF
-    provider == com.boox.day.api.ai.AiProvider.CHATGPT -> AiProblem.CHATGPT_INDEXING_PAUSED
-    !hasKey -> AiProblem.NO_KEY
+    provider == AiProvider.CHATGPT && !chatGptOptIn -> AiProblem.CHATGPT_INDEXING_PAUSED
+    !hasKey -> if (provider == AiProvider.CHATGPT) AiProblem.CHATGPT_CONNECTION else AiProblem.NO_KEY
+    provider == AiProvider.CHATGPT && chatGptUsageLimited -> AiProblem.CHATGPT_LIMIT
     !withinMonthlyLimit() -> AiProblem.MONTHLY_LIMIT
     else -> null
 }
 
+internal fun currentAiReadWaitReason(withinMonthlyLimit: () -> Boolean): AiProblem? = aiReadWaitReason(
+    aiEnabled = GlobalAppSettings.current.aiEnabled,
+    hasKey = AiProvider.ready,
+    provider = AiProvider.current,
+    chatGptOptIn = AiProvider.chatGptHandwritingIndexingAllowed,
+    chatGptUsageLimited = ChatGptProvider.state?.usageLimited == true,
+    withinMonthlyLimit = withinMonthlyLimit
+)
+
 /**
  * Unified OCR processing pipeline for all content sources.
  *
- * This is the SOLE OCR engine. Since Oct 2026 an AI model reads each page on the user's own
- * OpenRouter key ([OpenRouterOcrService], Gemini 3.1 Flash Lite); Google Cloud Vision
- * (the removed CloudVisionService, a key built into the app) is no longer used. Pages indexed before keep
- * their text.
+ * This pipeline indexes handwriting images and stores extracted text for search.
  *
  * Pipeline steps:
  * 1. Check quota (the page budget is effectively unlimited) and the monthly AI read limit
@@ -72,7 +81,7 @@ class UnifiedOcrPipeline(private val context: Context) {
         // (local default: 30000ms), read through OcrQuotaManager
     }
 
-    private val openRouterOcrService by lazy { OpenRouterOcrService() }
+    private val handwritingIndexingService by lazy { HandwritingIndexingService() }
     private val booxNoteRepository by lazy { com.boox.day.data.db.BooxNoteRepository(context) }
     private val ocrRepository by lazy { UnifiedOcrRepository(context) }
     private val quotaManager by lazy { OcrQuotaManager(context) }
@@ -180,6 +189,7 @@ class UnifiedOcrPipeline(private val context: Context) {
         sourceDate: String? = null,
         sourceTitle: String? = null
     ): ProcessResult {
+        val selection = AiProvider.capture()
         val start = System.currentTimeMillis()
         var bitmap: Bitmap? = null
 
@@ -193,16 +203,13 @@ class UnifiedOcrPipeline(private val context: Context) {
             return ProcessResult.BUDGET_EXHAUSTED
         }
 
-        // Step 2b: AI reads run on the user's own OpenRouter key and credit (Oct 2026), and only while
-        // AI Features is on: otherwise indexing waits (nothing marked, nothing failed), and the reason
-        // shows in Boox Notes settings (it kept saying "processing during idle time")
-        withContext(Dispatchers.IO) { com.boox.day.security.UserOpenRouterKey.ensureLoaded() }
-        val waitReason = aiReadWaitReason(
-            aiEnabled = com.boox.day.data.datastore.GlobalAppSettings.current.aiEnabled,
-            hasKey = com.boox.day.security.UserOpenRouterKey.hasKey,
-            provider = com.boox.day.api.ai.AiProvider.current,
-            withinMonthlyLimit = { quotaManager.canReadWithAi() }
-        )
+        if (!GlobalAppSettings.loaded || !GlobalAppSettings.current.ocrSettings.enabled) {
+            return ProcessResult.BUDGET_EXHAUSTED
+        }
+        if (AiProvider.current == AiProvider.OPENROUTER) {
+            withContext(Dispatchers.IO) { com.boox.day.security.UserOpenRouterKey.ensureLoaded() }
+        }
+        val waitReason = currentAiReadWaitReason { quotaManager.canReadWithAi() }
         if (waitReason != null) {
             Log.d(TAG, "Indexing waits: ${waitReason.shortText} (AI reads this month: " +
                 "${quotaManager.getAiReadsThisMonth()}/${quotaManager.monthlyAiReadLimit})")
@@ -265,14 +272,15 @@ class UnifiedOcrPipeline(private val context: Context) {
                 bitmap = processedBitmap
             }
 
-            // Step 6: AI page read on the user's OpenRouter key
-            val ocrResult = when (val read = executeAiRead(bitmap)) {
-                is OpenRouterOcrService.Result.Success -> {
+            // Keep the provider and profile that were selected when this page started.
+            val read = withContext(selection) { executeAiRead(processedBitmap) }
+            val ocrResult = when (read) {
+                is HandwritingIndexingService.Result.Success -> {
                     quotaManager.recordAiRead()
                     IndexingStatus.onPageRead()
                     OcrResult(text = read.text, confidence = read.confidence, language = read.language, blocks = read.blocks)
                 }
-                is OpenRouterOcrService.Result.Paused -> {
+                is HandwritingIndexingService.Result.Paused -> {
                     // No key, rejected key, no credit, no internet or OpenRouter down: wait, without
                     // counting a page failure
                     Log.w(TAG, "AI read paused (${read.problem}) - $sourceId/$pageId stays queued")
@@ -280,7 +288,7 @@ class UnifiedOcrPipeline(private val context: Context) {
                     ocrRepository.resetToPending(source.sourceType, sourceId, pageId)
                     return ProcessResult.BUDGET_EXHAUSTED
                 }
-                is OpenRouterOcrService.Result.Failed -> {
+                is HandwritingIndexingService.Result.Failed -> {
                     return handleRetryableFailure(
                         sourceType = source.sourceType,
                         sourceId = sourceId,
@@ -415,16 +423,20 @@ class UnifiedOcrPipeline(private val context: Context) {
     }
 
     /**
-     * Read the page with AI on the user's OpenRouter key ([OpenRouterOcrService]).
+     * Read a page with the selected AI provider.
      */
-    private suspend fun executeAiRead(bitmap: Bitmap): OpenRouterOcrService.Result = withContext(Dispatchers.IO) {
+    private suspend fun executeAiRead(bitmap: Bitmap): HandwritingIndexingService.Result = withContext(Dispatchers.IO) {
         try {
             withTimeoutOrNull(AI_READ_TIMEOUT_MS) {
-                openRouterOcrService.recognizeText(bitmap)
-            } ?: OpenRouterOcrService.Result.Paused(AiProblem.timedOut()).also { Log.w(TAG, "AI read timed out") }
+                handwritingIndexingService.recognizeText(bitmap)
+            } ?: HandwritingIndexingService.Result.Paused(
+                if (AiProvider.current == AiProvider.CHATGPT) AiProblem.CHATGPT_UNAVAILABLE else AiProblem.timedOut()
+            ).also { Log.w(TAG, "AI read timed out") }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "AI read exception: ${e.message}", e)
-            OpenRouterOcrService.Result.Failed(e.message ?: "error")
+            HandwritingIndexingService.Result.Failed(e.message ?: "error")
         }
     }
 
@@ -450,6 +462,6 @@ class UnifiedOcrPipeline(private val context: Context) {
      * Close resources.
      */
     fun close() {
-        // OpenRouterOcrService doesn't need explicit cleanup
+        // HandwritingIndexingService doesn't need explicit cleanup
     }
 }

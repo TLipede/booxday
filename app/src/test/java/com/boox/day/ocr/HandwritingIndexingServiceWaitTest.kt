@@ -8,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import java.net.ConnectException
 import java.net.UnknownHostException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -16,14 +17,14 @@ import org.junit.Test
  * Until Oct 2026 these counted, and 3 of them quarantined the page for good (owner's Go 10.3:
  * 7 pages, all "Network error", never read).
  */
-class OpenRouterOcrServiceWaitTest {
+class HandwritingIndexingServiceWaitTest {
 
-    private val service = OpenRouterOcrService()
+    private val service = HandwritingIndexingService()
 
     private fun paused(error: AiResponse.Error, network: NetworkState): AiProblem {
         val result = service.resultFor(error, network)
-        assertTrue("$error -> $result", result is OpenRouterOcrService.Result.Paused)
-        return (result as OpenRouterOcrService.Result.Paused).problem
+        assertTrue("$error -> $result", result is HandwritingIndexingService.Result.Paused)
+        return (result as HandwritingIndexingService.Result.Paused).problem
     }
 
     @Test
@@ -56,7 +57,7 @@ class OpenRouterOcrServiceWaitTest {
             AiResponse.Error.NoContent()
         )) {
             val result = service.resultFor(error, NetworkState.ONLINE)
-            assertEquals(OpenRouterOcrService.Result.Failed(error.message), result)
+            assertEquals(HandwritingIndexingService.Result.Failed(error.message), result)
         }
     }
 
@@ -72,6 +73,8 @@ class OpenRouterOcrServiceWaitTest {
             models = listOf(m1, m2),
             network = { NetworkState.ONLINE }
         ) { req ->
+            assertTrue(req.handwritingIndexing)
+            assertTrue(req.zeroDataRetention)
             tried += req.model.id
             when (req.model.id) {
                 "first/model" -> AiResponse.Success("{}", req.model.id, null)
@@ -80,14 +83,27 @@ class OpenRouterOcrServiceWaitTest {
         }
 
         assertEquals(listOf("first/model", "second/model"), tried)
-        assertTrue(result is OpenRouterOcrService.Result.Success)
-        assertEquals("Hello ink", (result as OpenRouterOcrService.Result.Success).text)
+        assertTrue(result is HandwritingIndexingService.Result.Success)
+        assertEquals("Hello ink", (result as HandwritingIndexingService.Result.Success).text)
+    }
+
+    @Test
+    fun `ChatGPT builds an indexing request with an image schema and explicit consent category`() = runBlocking {
+        val model = AiModel.ChatGpt("gpt-test", generation = 0)
+        val result = service.recognizeWithModels("AA==", listOf(model)) { req ->
+            assertTrue(req.handwritingIndexing)
+            assertFalse(req.zeroDataRetention)
+            assertTrue(req.messages.any { it is com.boox.day.api.ai.AiMessage.UserWithImage })
+            assertEquals("ocr_text", req.jsonSchema?.name)
+            AiResponse.Success("""{"hasText": true, "language": "en", "text": "Hello ink"}""", model.id, null)
+        }
+        assertEquals("Hello ink", (result as HandwritingIndexingService.Result.Success).text)
     }
 
     @Test
     fun `explicit hasText false still succeeds as genuine blank page`() {
         val parsed = service.parse("""{"hasText": false, "language": "", "text": ""}""")
-        assertTrue(parsed is OpenRouterOcrService.Result.Success)
-        assertEquals("", (parsed as OpenRouterOcrService.Result.Success).text)
+        assertTrue(parsed is HandwritingIndexingService.Result.Success)
+        assertEquals("", (parsed as HandwritingIndexingService.Result.Success).text)
     }
 }

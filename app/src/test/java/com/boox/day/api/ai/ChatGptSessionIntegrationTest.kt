@@ -6,9 +6,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -55,6 +58,7 @@ class ChatGptSessionIntegrationTest {
             assertEquals("Bearer access-1", modelsRequest.getHeader("Authorization"))
             assertEquals("Synthetic model", model.name)
             session.selectModel(session.state, model)
+            session.setHandwritingIndexing(session.state, true)
 
             server.enqueue(stream())
             val route = AiModel.ChatGpt(model.slug, session.state.generation)
@@ -75,8 +79,10 @@ class ChatGptSessionIntegrationTest {
             assertTrue(refresh.body.readUtf8().contains("refresh_token=refresh-1"))
             assertEquals("/.well-known/jwks.json", server.request().path)
             assertEquals("refresh-2", store.saved?.active?.pendingRefresh?.refreshToken)
+            assertTrue(store.saved?.active?.allowHandwritingIndexing == true)
             session = ChatGptSession(store, api) { time }
             session.load()
+            assertTrue(session.state.active?.allowHandwritingIndexing == true)
 
             server.enqueue(jwks())
             server.enqueue(stream())
@@ -100,6 +106,7 @@ class ChatGptSessionIntegrationTest {
             assertEquals("/api/accounts/oauth/revoke", revoke.path)
             assertTrue(revoke.body.readUtf8().contains("token=refresh-2"))
             assertFalse(session.state.active!!.connected)
+            assertFalse(session.state.active!!.allowHandwritingIndexing)
             assertEquals(clientId, store.saved?.active?.clientId)
             assertNull(store.saved?.active?.grant)
             assertTrue(session.execute(afterRestart, request.copy(model = afterRestart)) { true } is AiResponse.Error)
@@ -135,7 +142,7 @@ class ChatGptSessionIntegrationTest {
             val audio = AiRequest(route, listOf(AiMessage.UserWithAudio("Transcribe", "synthetic", "audio/wav")))
             assertTrue(session.execute(route, audio) { true } is AiResponse.Error)
             val privacy = session.execute(route, text.copy(zeroDataRetention = true)) { true } as AiResponse.Error.ChatGpt
-            assertEquals(AiProblem.CHATGPT_INDEXING_PAUSED, privacy.problem)
+            assertTrue(privacy.message.contains("requires zero data retention"))
             assertEquals(2, server.requestCount)
 
             server.enqueue(MockResponse().setHeader("Content-Type", "text/event-stream").setBody(
@@ -148,6 +155,59 @@ class ChatGptSessionIntegrationTest {
             session.resumeUsage(session.state)
             server.enqueue(stream())
             assertTrue(session.execute(route, text) { true }.isSuccess)
+        }
+    }
+
+    @Test fun `background OCR requires account opt-in and respects revocation and ZDR requests`() = runBlocking {
+        MockWebServer().use { server ->
+            val otherAccount = ChatGptProfile(clientId = "oaiapp_other")
+            store.saved = ChatGptConnections(profiles = listOf(otherAccount))
+            val session = ChatGptSession(store, api(server)) { time }
+            signIn(session, server)
+            val model = ChatGptModel("gpt-test", "Synthetic model")
+            session.selectModel(session.state, model)
+
+            suspend fun request(zdr: Boolean = false): AiResponse<String> {
+                val route = AiModel.ChatGpt(model.slug, session.state.generation)
+                val page = AiRequest(
+                    route, listOf(AiMessage.UserWithImage("Read", "/9j/synthetic")),
+                    jsonSchema = JsonSchema("ocr", mapOf("type" to "object")),
+                    zeroDataRetention = zdr,
+                    handwritingIndexing = true
+                )
+                return session.execute(route, page) { true }
+            }
+
+            assertEquals(AiProblem.CHATGPT_INDEXING_PAUSED, (request() as AiResponse.Error.ChatGpt).problem)
+            assertEquals(2, server.requestCount)
+            session.setHandwritingIndexing(session.state, true)
+            assertTrue(request(zdr = true) is AiResponse.Error)
+            assertEquals(2, server.requestCount)
+            server.enqueue(stream())
+            assertTrue(request().isSuccess)
+            repeat(2) { server.request() }
+            val uploaded = server.request()
+            assertEquals("/v1/responses", uploaded.path)
+            val body = uploaded.body.readUtf8()
+            assertTrue(body.contains("data:image/jpeg;base64,/9j/synthetic"))
+            assertTrue(body.contains("\"store\":false"))
+            assertTrue(body.contains("\"type\":\"json_schema\""))
+
+            server.enqueue(MockResponse().setResponseCode(400))
+            assertEquals(AiProblem.CHATGPT_MODEL_UNSUPPORTED, (request() as AiResponse.Error.ChatGpt).problem)
+            session.selectAccount(otherAccount.clientId)
+            assertFalse(session.state.active!!.allowHandwritingIndexing)
+            session.selectAccount(clientId)
+            assertTrue(session.state.active!!.allowHandwritingIndexing)
+            server.request() // Consume the rejected model request before waiting for the next upload.
+
+            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+            val inFlight = async { request() }
+            assertEquals("/v1/responses", withContext(Dispatchers.IO) { server.request() }.path)
+            session.setHandwritingIndexing(session.state, false)
+            assertTrue(withTimeout(5_000) { inFlight.await() } is AiResponse.Error)
+            assertEquals(AiProblem.CHATGPT_INDEXING_PAUSED, (request() as AiResponse.Error.ChatGpt).problem)
+            assertEquals(5, server.requestCount)
         }
     }
 

@@ -40,7 +40,10 @@ data class AiRequest(
     val overrideReasoning: ReasoningConfig? = null,
 
     /** Route only to providers with zero data retention (OpenRouter `provider.zdr`) */
-    val zeroDataRetention: Boolean = false
+    val zeroDataRetention: Boolean = false,
+
+    /** Background page reading requires its own consent on ChatGPT and ZDR on OpenRouter. */
+    val handwritingIndexing: Boolean = false
 )
 
 /**

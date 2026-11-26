@@ -24,12 +24,21 @@ internal class ChatGptProfile(
     val email: String? = null,
     val modelSlug: String? = null,
     val grant: ChatGptGrant? = null,
-    val pendingRefresh: ChatGptGrant? = null
+    val pendingRefresh: ChatGptGrant? = null,
+    val allowHandwritingIndexing: Boolean = false
 ) {
     fun signedOut() = ChatGptProfile(clientId, subject, email, modelSlug)
-    fun withModel(slug: String) = ChatGptProfile(clientId, subject, email, slug, grant, pendingRefresh)
+    fun withModel(slug: String) =
+        ChatGptProfile(clientId, subject, email, slug, grant, pendingRefresh, allowHandwritingIndexing)
+
     fun withGrant(value: ChatGptGrant, email: String? = this.email) =
-        ChatGptProfile(clientId, subject, email, modelSlug, value)
+        ChatGptProfile(clientId, subject, email, modelSlug, value, allowHandwritingIndexing = allowHandwritingIndexing)
+
+    fun withPendingRefresh(value: ChatGptGrant) =
+        ChatGptProfile(clientId, subject, email, modelSlug, grant, value, allowHandwritingIndexing)
+
+    fun withHandwritingIndexing(enabled: Boolean) =
+        ChatGptProfile(clientId, subject, email, modelSlug, grant, pendingRefresh, enabled)
 }
 
 @Serializable
@@ -64,7 +73,8 @@ internal class ChatGptSession(
         val label: String,
         val connected: Boolean,
         val planEnabled: Boolean,
-        val modelSlug: String?
+        val modelSlug: String?,
+        val allowHandwritingIndexing: Boolean
     )
 
     data class State(
@@ -128,8 +138,9 @@ internal class ChatGptSession(
                     if (profile?.subject != null && profile.subject != identity.subject) {
                         throw ChatGptFailure("This sign-in returned a different ChatGPT account. Choose Add account to connect it.")
                     }
+                    val previous = saved.profiles.firstOrNull { it.clientId == callback.clientId }
                     val verified = ChatGptProfile(callback.clientId, identity.subject, identity.email,
-                        profile?.modelSlug, grant)
+                        previous?.modelSlug, grant, allowHandwritingIndexing = previous?.allowHandwritingIndexing == true)
                     limitedAccounts.remove(callback.clientId)
                     persist(saved.withProfile(verified, activate = true), changeSession = true)
                 }
@@ -155,6 +166,14 @@ internal class ChatGptSession(
     suspend fun selectModel(expected: State, model: ChatGptModel) = update {
         if (state.generation != expected.generation || it.active?.clientId != expected.activeClientId) throw changed()
         it.withProfile((it.active ?: throw changed()).withModel(model.slug))
+    }
+
+    suspend fun setHandwritingIndexing(expected: State, enabled: Boolean) = update { saved ->
+        val profile = saved.active ?: throw changed()
+        if (state.generation != expected.generation || profile.clientId != expected.activeClientId ||
+            profile.grant?.hasPlanPermission != true
+        ) throw changed()
+        saved.withProfile(profile.withHandwritingIndexing(enabled))
     }
 
     private suspend fun update(transform: (ChatGptConnections) -> ChatGptConnections) = withContext(Dispatchers.IO) {
@@ -207,7 +226,10 @@ internal class ChatGptSession(
         requireRequest(model, request)
         val body = ChatGptProtocol.requestBody(request, model.id)
         withContext(Dispatchers.IO) {
-            val permitted = { isCurrent(model.generation) && allowed() }
+            val permitted = {
+                isCurrent(model.generation) && allowed() &&
+                    (!request.handwritingIndexing || state.active?.allowHandwritingIndexing == true)
+            }
             val call = beginCall(model.generation, permitted, forInference = true) { api.responseCall(it, body, permitted) }
             try {
                 val result = api.response(call, model.id)
@@ -220,7 +242,14 @@ internal class ChatGptSession(
                     }
                 }
                 if (!permitted()) throw changed()
-                result
+                if (request.handwritingIndexing && result is AiResponse.Error.ChatGpt && result.problem == AiProblem.MODEL_FAILED) {
+                    when (result.status) {
+                        400, 404 -> chatGptError(AiProblem.CHATGPT_MODEL_UNSUPPORTED.message,
+                            AiProblem.CHATGPT_MODEL_UNSUPPORTED, result.status)
+                        403 -> result.copy(problem = AiProblem.CHATGPT_CONNECTION)
+                        else -> result
+                    }
+                } else result
             } finally {
                 endCall(call)
             }
@@ -237,7 +266,7 @@ internal class ChatGptSession(
 
     private fun requireRequest(model: AiModel.ChatGpt, request: AiRequest) {
         if (request.zeroDataRetention) {
-            throw ChatGptFailure(AiProblem.CHATGPT_INDEXING_PAUSED.message, AiProblem.CHATGPT_INDEXING_PAUSED)
+            throw ChatGptFailure("This request requires zero data retention routing, which is unavailable with ChatGPT.")
         }
         if (request.messages.any { it is AiMessage.UserWithAudio }) {
             throw ChatGptFailure("ChatGPT plan usage doesn't support voice recordings. Use tablet speech recognition when available.")
@@ -246,6 +275,9 @@ internal class ChatGptSession(
         if (state.generation != model.generation) throw changed()
         if (state.active?.planEnabled != true) {
             throw ChatGptFailure(AiProblem.CHATGPT_CONNECTION.message, AiProblem.CHATGPT_CONNECTION)
+        }
+        if (request.handwritingIndexing && state.active?.allowHandwritingIndexing != true) {
+            throw ChatGptFailure(AiProblem.CHATGPT_INDEXING_PAUSED.message, AiProblem.CHATGPT_INDEXING_PAUSED)
         }
         if (model.id.isBlank()) throw ChatGptFailure("Choose a ChatGPT model in AI Settings.")
         if (state.active?.modelSlug != model.id) throw changed()
@@ -293,8 +325,7 @@ internal class ChatGptSession(
         return withContext(NonCancellable) {
             val latest = profile.pendingRefresh ?: try {
                 api.refresh(profile.clientId, grant).also { rotated ->
-                    persist(saved.withProfile(ChatGptProfile(profile.clientId, profile.subject, profile.email,
-                        profile.modelSlug, grant, rotated)))
+                    persist(saved.withProfile(profile.withPendingRefresh(rotated)))
                 }
             } catch (failure: ChatGptFailure) {
                 if (failure.code in ChatGptApi.REFRESH_TERMINAL) {
@@ -353,7 +384,7 @@ internal class ChatGptSession(
         val accounts = value.profiles.mapIndexed { index, profile ->
             val suffix = profile.email ?: if (profile.subject == null) "Sign-in incomplete" else "ChatGPT account"
             Account(profile.clientId, "${index + 1}. $suffix", profile.grant != null,
-                profile.grant?.hasPlanPermission == true, profile.modelSlug)
+                profile.grant?.hasPlanPermission == true, profile.modelSlug, profile.allowHandwritingIndexing)
         }
         state = State(accounts, value.activeClientId, state.generation + if (changeSession) 1 else 0, ready = true,
             usageLimited = value.activeClientId in limitedAccounts)

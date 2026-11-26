@@ -16,7 +16,6 @@ import com.boox.day.api.ReasoningConfig
 import com.boox.day.api.ai.AiClient
 import com.boox.day.api.ai.AiModel
 import com.boox.day.api.ai.AiProblem
-import com.boox.day.api.ai.AiProvider
 import com.boox.day.api.ai.AiRequest
 import com.boox.day.api.ai.AiResponse
 import com.boox.day.api.ai.aiRequest
@@ -31,18 +30,14 @@ import kotlinx.serialization.json.jsonObject
 import java.io.ByteArrayOutputStream
 
 /**
- * Reads a page image for search indexing with an AI model on the user's own OpenRouter key
- * (Oct 2026, replaces Google Cloud Vision). Picked from a test on 10 of the owner's handwritten
- * BOOX Notes pages (14 Oct 2026): Gemini 3.1 Flash Lite found 99.5% of the words at about $0.0005
- * a page; Cloud Vision's existing index of the same pages had 85%.
- *
- * Only providers with zero data retention see the page, and thinking is off (not needed to read).
- * Indexing is background work: a missing key or empty credit never opens the key popup, it pauses.
+ * Reads page images for search using the selected provider. OpenRouter requests require ZDR.
+ * ChatGPT requests require separate consent on the connected profile. Background work never opens
+ * a credential popup.
  */
-class OpenRouterOcrService {
+class HandwritingIndexingService {
 
     companion object {
-        private const val TAG = "OpenRouterOcrService"
+        private const val TAG = "HandwritingIndexingService"
 
         private const val JPEG_QUALITY = 85
 
@@ -84,9 +79,6 @@ RULES:
 
     suspend fun recognizeText(bitmap: Bitmap): Result =
         com.boox.day.api.ai.LastAiProblem.withScope("background_ocr") {
-            if (AiProvider.current == AiProvider.CHATGPT) {
-                return@withScope Result.Paused(AiProblem.CHATGPT_INDEXING_PAUSED)
-            }
             val base64 = withContext(Dispatchers.Default) { encodeJpeg(bitmap) }
             val models = ModelConfigProvider.getChain(AiJob.SEARCH_INDEXING)
             recognizeWithModels(base64, models)
@@ -111,14 +103,15 @@ RULES:
         for (model in models) {
             currentCoroutineContext().ensureActive()
             if (creditRefusal != null && !OpenRouterAccount.isFreeModel(model.id)) continue
+            val chatGpt = model is AiModel.ChatGpt
             val baseRequest = aiRequest {
                 model(model)
                 systemPrompt(SYSTEM_PROMPT)
                 userMessageWithImage("Read the handwritten text:", base64)
                 jsonSchema("ocr_text", StructuredOutputSchemas.ocrTextWithLanguageSchema)
-                zeroDataRetention()
-            }
-            val request = if ((model as? AiModel.Custom)?.userChoice == true) {
+                if (!chatGpt) zeroDataRetention()
+            }.copy(handwritingIndexing = true)
+            val request = if (chatGpt || (model as? AiModel.Custom)?.userChoice == true) {
                 baseRequest
             } else {
                 baseRequest.copy(overrideReasoning = ReasoningConfig.disabled())

@@ -21,8 +21,11 @@ enum class AiProvider(val displayName: String) {
             CHATGPT -> ChatGptProvider.state?.active?.let { it.planEnabled && it.modelSlug != null } == true
         }
 
-        /** Background OCR and audio require capabilities unique to the existing OpenRouter route. */
+        /** Readiness of the OpenRouter-specific key and model settings. */
         val openRouterAvailable: Boolean get() = current == OPENROUTER && UserOpenRouterKey.hasKey
+
+        internal val chatGptHandwritingIndexingAllowed: Boolean
+            get() = ChatGptProvider.state?.active?.allowHandwritingIndexing == true
 
         fun allows(provider: AiProvider): Boolean =
             GlobalAppSettings.loaded && GlobalAppSettings.current.aiEnabled && current == provider

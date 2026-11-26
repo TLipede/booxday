@@ -218,7 +218,7 @@ fun AiSettingsDialog(
                         SettingCard(
                             title = "Privacy",
                             description = if (provider == AiProvider.CHATGPT)
-                                "OpenAI receives the text and images needed for the tools you use. Smart Suggestions and Optimize My Day also send your AI options. Requests disable response storage, and OpenAI’s data policies still apply. Background handwriting indexing and AI voice recording are unavailable with ChatGPT."
+                                "OpenAI receives the text and images needed for the tools you use. Smart Suggestions and Optimize My Day also send your AI options. Requests disable response storage, and OpenAI’s data policies still apply. Background handwriting indexing requires your separate permission. AI voice recording requires OpenRouter."
                             else
                                 "AI requests go to OpenRouter using your own account and to the company that runs the selected model. Handwriting Search can also upload memo and BOOX Notes pages through zero-data-retention routes. Smart Suggestions and Optimize My Day also send your AI options."
                         ) {}

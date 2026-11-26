@@ -220,6 +220,17 @@ internal fun ChatGptSettingsCard(aiEnabled: Boolean) {
                 }
             }
         }
+
+        SettingCard(
+            title = "Allow ChatGPT to index handwriting",
+            description = "When AI Features and Read my handwriting are on, BooxDay sends images of memo and BOOX Notes pages to OpenAI in the background so you can search them. This uses your ChatGPT plan. BooxDay disables response storage. OpenAI’s data policies apply. Zero data retention is unavailable on this route."
+        ) {
+            EInkToggle(
+                checked = active.allowHandwritingIndexing,
+                onCheckedChange = { enabled -> runAction { session.setHandwritingIndexing(state, enabled) } },
+                enabled = !busy
+            )
+        }
     }
 }
 

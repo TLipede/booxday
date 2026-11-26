@@ -64,8 +64,14 @@ enum class AiProblem(val message: String, val shortText: String, val indexingWai
         indexingWaits = true
     ),
     CHATGPT_INDEXING_PAUSED(
-        "Handwriting indexing requires OpenRouter’s zero data retention routing. It is paused while ChatGPT is selected.",
-        "handwriting indexing is paused for ChatGPT",
+        "Allow ChatGPT to index handwriting in AI Settings to read new pages.",
+        "ChatGPT handwriting indexing needs permission",
+        indexingWaits = true
+    ),
+
+    CHATGPT_MODEL_UNSUPPORTED(
+        "Choose a ChatGPT model in AI Settings that supports the input and output this feature needs.",
+        "the selected ChatGPT model is incompatible",
         indexingWaits = true
     ),
 
