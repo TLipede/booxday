@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.serialization.Serializable
+import com.boox.day.api.ai.AiProvider
 
 
 // Define the target page size (A4 in points: 595 x 842)
@@ -21,7 +22,16 @@ object GlobalAppSettings {
     val current: AppSettings
         get() = _current.value
 
+    @Volatile
+    internal var aiRoutingRevision: Long = 0
+        private set
+
+    @Synchronized
     fun update(settings: AppSettings) {
+        val previous = current
+        if (previous.aiProvider != settings.aiProvider || previous.aiEnabled != settings.aiEnabled) {
+            aiRoutingRevision++
+        }
         _current.value = settings
     }
 
@@ -158,6 +168,8 @@ data class AppSettings(
 
     // AI Features - allow users to disable all AI-powered features (voice input, OCR, summaries, etc.)
     val aiEnabled: Boolean = true,                    // Enabled by default
+
+    val aiProvider: AiProvider = AiProvider.OPENROUTER,
 
     /** The OpenRouter model the user picked for each AI job; empty = BooxDay's choice (Oct 2026) */
     val aiModels: AiModelChoices = AiModelChoices(),

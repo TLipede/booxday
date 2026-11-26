@@ -36,7 +36,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.data.datastore.SetupChecklistStore
+import com.boox.day.ui.components.ChatGptSettingsCard
 import com.boox.day.ui.components.AiModelsCard
 import com.boox.day.ui.components.AiOptionsCard
 import com.boox.day.ui.components.ApiKeySettingsCard
@@ -63,9 +65,11 @@ fun AiSettingsDialog(
     onDismiss: () -> Unit,
     // AI Features master toggle
     aiEnabled: Boolean,
-    onAiEnabledChanged: (Boolean) -> Unit
+    onAiEnabledChanged: (Boolean) -> Unit,
+    onProviderChanged: (AiProvider) -> Unit
 ) {
     val context = LocalContext.current
+    val provider = AiProvider.current
 
     // Oct 2026: opening AI Settings clears its Settings-menu dot (it only cleared on the AI switch,
     // so most users kept a "1" on the gear); covers the menu, the key popup and the calendar notice
@@ -78,7 +82,7 @@ fun AiSettingsDialog(
     val modelsInView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
     LaunchedEffect(Unit) {
         if (com.boox.day.ui.attention.SettingsJump.consume(com.boox.day.ui.attention.SettingsPlace.AI_SETTINGS) &&
-            com.boox.day.security.UserOpenRouterKey.hasKey && com.boox.day.api.AiPickStatus.failures.isNotEmpty()
+            AiProvider.openRouterAvailable && com.boox.day.api.AiPickStatus.failures.isNotEmpty()
         ) {
             kotlinx.coroutines.delay(150)  // laid out first
             modelsInView.bringIntoView()
@@ -148,8 +152,23 @@ fun AiSettingsDialog(
                     Column(
                         verticalArrangement = Arrangement.spacedBy(EInkTheme.Global.paddingSmall)
                     ) {
-                        // The user's own OpenRouter key (Oct 2026): AI features need it, so it comes first
-                        ApiKeySettingsCard()
+                        SettingCard(
+                            title = "AI provider",
+                            description = "The selected provider receives AI requests from this tablet."
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                AiProvider.entries.forEach { choice ->
+                                    OutlinedButton(
+                                        enabled = choice != provider,
+                                        onClick = { onProviderChanged(choice) }
+                                    ) { Text(if (choice == provider) "${choice.displayName} (selected)" else choice.displayName) }
+                                }
+                            }
+                        }
+                        when (provider) {
+                            AiProvider.OPENROUTER -> ApiKeySettingsCard()
+                            AiProvider.CHATGPT -> ChatGptSettingsCard(aiEnabled)
+                        }
 
                         // AI Features Master Toggle
                         SettingCard(
@@ -170,9 +189,12 @@ fun AiSettingsDialog(
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = if (aiEnabled)
-                                            "When you use an AI tool, its page images, text or voice clip are sent to OpenRouter, on your own account, to be read or answered."
+                                            if (provider == AiProvider.CHATGPT)
+                                                "AI tools send text and handwriting images to OpenAI using your connected ChatGPT plan."
+                                            else
+                                                "AI tools send text, images or voice clips to OpenRouter using your own account."
                                         else
-                                            "Voice input, the AI tools and reading pages for search are off. None of your data goes to OpenRouter.",
+                                            "AI tools and AI page reading are off. BooxDay sends no inference requests.",
                                         fontSize = EInkTheme.Preferences.explanationFontSize,
                                         color = EInkTheme.Colors.gray
                                     )
@@ -185,7 +207,9 @@ fun AiSettingsDialog(
                         }
 
                         // Oct 2026: which OpenRouter model each AI job uses
-                        AiModelsCard(aiEnabled = aiEnabled, modifier = Modifier.bringIntoViewRequester(modelsInView))
+                        if (provider == AiProvider.OPENROUTER) {
+                            AiModelsCard(aiEnabled = aiEnabled, modifier = Modifier.bringIntoViewRequester(modelsInView))
+                        }
 
                         // Oct 2026: the three AI options that measurably change answers (replaced AI Preferences)
                         AiOptionsCard(aiEnabled = aiEnabled)
@@ -193,7 +217,10 @@ fun AiSettingsDialog(
                         // Privacy (Oct 2026): where AI requests go. Getting a key is the key card's job
                         SettingCard(
                             title = "Privacy",
-                            description = "BooxDay sends nothing to its developer. AI requests go from this tablet to OpenRouter, on your own account, and to the company that runs the model. Reading pages for search also sends memo and Boox Notes pages, while Settings → BOOX Notes & Search → Handwriting Search → Read my handwriting is on. Smart Suggestions and Optimize My Day also send your AI options. With AI Features off, none of your data goes to OpenRouter."
+                            description = if (provider == AiProvider.CHATGPT)
+                                "OpenAI receives the text and images needed for the tools you use. Smart Suggestions and Optimize My Day also send your AI options. Requests disable response storage, and OpenAI’s data policies still apply. Background handwriting indexing requires your separate permission. AI voice recording requires OpenRouter."
+                            else
+                                "AI requests go to OpenRouter using your own account and to the company that runs the selected model. Handwriting Search can also upload memo and BOOX Notes pages through zero-data-retention routes. Smart Suggestions and Optimize My Day also send your AI options."
                         ) {}
                     }
                 }

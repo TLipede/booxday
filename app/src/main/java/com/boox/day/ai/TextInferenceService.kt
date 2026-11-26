@@ -397,7 +397,6 @@ object TextInferenceService {
                 }
             },
             processResponse = { response, model ->
-                log.d("${model.displayName} response: ${response.data.take(300)}...")
                 val parsed = parseResponse(response.data, rawText, config.trackCorrections, model.displayName)
                 when {
                     !parsed.isSuccess -> null

@@ -94,7 +94,6 @@ object VoiceTextParser {
 
             when (val response = AiRetryExecutor.executeWithBackup(audioModels, buildRequest = ::buildRequest)) {
                 is AiResponse.Success -> {
-                    Log.d(TAG, "Gemini response: ${response.data.take(500)}...")
                     val result = parseResponse(response.data)
                     if (result.success) {
                         return result
@@ -294,14 +293,13 @@ If the audio is unclear or empty, return a brief note like "Could not understand
             return ParsedText.empty("No text to format")
         }
 
-        Log.d(TAG, "formatTranscribedText: '${rawText.take(100)}...' (${rawText.length} chars)")
 
         // Without the user's own OpenRouter key the text goes in as heard (Oct 2026)
-        if (!com.boox.day.security.UserOpenRouterKey.hasKey) {
+        if (!com.boox.day.api.ai.AiProvider.ready) {
             val capitalized = rawText.trim().replaceFirstChar { it.uppercaseChar() }
             com.boox.day.ui.SnackState.globalSnackFlow.tryEmit(
                 com.boox.day.ui.SnackConf(
-                    text = "Added as heard. Add an OpenRouter key in AI Settings for tidier text.",
+                    text = "Added as heard. Connect your AI provider in AI Settings for tidier text.",
                     duration = com.boox.day.ui.SnackConf.DURATION_STANDARD
                 )
             )

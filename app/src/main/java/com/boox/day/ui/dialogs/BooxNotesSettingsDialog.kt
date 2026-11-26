@@ -1,5 +1,6 @@
 package com.boox.day.ui.dialogs
 
+import com.boox.day.api.ai.AiProvider
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -108,7 +109,7 @@ fun BooxNotesSettingsDialog(
     val settingsPage = BooxNotesPlaces.settingsPage
 
     // Pages are read by AI on the user's own OpenRouter key (Oct 2026); without one indexing waits
-    val isStandaloneWithoutOcrKey = !com.boox.day.security.UserOpenRouterKey.hasKey
+    val isStandaloneWithoutOcrKey = AiProvider.current == AiProvider.OPENROUTER && !AiProvider.ready
 
     // Check current permission status
     var hasPermission by remember {
@@ -348,7 +349,7 @@ private fun BooxNotesSetupSteps(
         calendarState = calendar?.state,
         ocrOn = settings.ocrSettings.enabled,
         aiOn = settings.aiEnabled,
-        hasKey = com.boox.day.security.UserOpenRouterKey.hasKey,
+        hasKey = AiProvider.ready,
         onRequestAccess = onRequestAccess,
         onCheckNow = onCheckNow,
         onOpenCalendarAccounts = onOpenCalendarAccounts,
@@ -373,6 +374,7 @@ internal fun BooxNotesSetupContent(
     onTurnOnReading: () -> Unit,
     onSeeNotes: () -> Unit
 ) {
+    val chatGpt = AiProvider.current == AiProvider.CHATGPT
     Column(verticalArrangement = Arrangement.spacedBy(EInkTheme.Global.paddingMedium)) {
         SetupPlaceStep(number = 1, done = hasPermission, title = "Let BooxDay see your notes") {
             if (hasPermission) {
@@ -433,9 +435,11 @@ internal fun BooxNotesSetupContent(
             SetupStepText(
                 when {
                     ocrOn && !aiOn -> "On, paused: AI Features is off."
-                    ocrOn && !hasKey -> "On, waiting for a key."
+                    ocrOn && chatGpt && !AiProvider.chatGptHandwritingIndexingAllowed ->
+                        "On, paused until you allow ChatGPT to index handwriting in AI Settings."
+                    ocrOn && !hasKey -> "On, waiting for ${AiProvider.current.displayName} setup."
                     ocrOn -> "On. Pages are read while the tablet is idle."
-                    else -> "Search the words in your notes and get better suggestions. Pages are read by AI on your OpenRouter account."
+                    else -> "Search the words in notes and memos. Pages are read by your selected AI provider."
                 }
             )
             Row(
@@ -537,6 +541,8 @@ internal fun OcrSettingsSection(
     val settings = GlobalAppSettings.current
     val ocrSettings = settings.ocrSettings
     val isProcessing = processingState?.isProcessing == true
+    val chatGpt = settings.aiProvider == AiProvider.CHATGPT
+    val chatGptNeedsOptIn = chatGpt && !AiProvider.chatGptHandwritingIndexingAllowed
     // Why reading is waiting (no internet, OpenRouter down, ...), Oct 2026
     val indexingWaitsFor by IndexingStatus.waitingFor.collectAsState()
 
@@ -546,7 +552,7 @@ internal fun OcrSettingsSection(
     // OCR stats loading
     var ocrStats by remember { mutableStateOf<UnifiedOcrStatistics?>(null) }
 
-    // Pages read by AI on the user's OpenRouter key this month (Oct 2026)
+    // Pages read by either AI provider count toward the same monthly limit.
     var aiReadsUsed by remember { mutableStateOf(0) }
 
     // Load stats when OCR is enabled and repository is available
@@ -657,10 +663,11 @@ internal fun OcrSettingsSection(
     // OCR Enable toggle
     SettingCard(
         title = "Read my handwriting",
-        description = if (isStandaloneWithoutOcrKey) {
-            "Reads pages with AI on your OpenRouter key, while AI Features is on: add a key in AI Settings"
-        } else {
-            "Reads notes, memos and tasks while the tablet is idle"
+        description = when {
+            chatGptNeedsOptIn -> "In AI Settings, turn on Allow ChatGPT to index handwriting to send new pages to OpenAI."
+            chatGpt -> "Sends memo and BOOX Notes page images to OpenAI while the tablet is idle and AI Features is on."
+            isStandaloneWithoutOcrKey -> "Add an OpenRouter key in AI Settings so BooxDay can read pages while AI Features is on."
+            else -> "Reads notes, memos and tasks while the tablet is idle."
         }
     ) {
         Row(
@@ -672,6 +679,8 @@ internal fun OcrSettingsSection(
                 text = when {
                     // Oct 2026: AI Features off pauses page reading (UnifiedOcrPipeline.aiReadWaitReason)
                     ocrSettings.enabled && !GlobalAppSettings.current.aiEnabled -> "On, paused: AI Features is off"
+                    chatGptNeedsOptIn && ocrSettings.enabled -> "On, waiting for ChatGPT permission"
+                    chatGpt && !AiProvider.ready && ocrSettings.enabled -> "On, waiting for ChatGPT setup"
                     isStandaloneWithoutOcrKey && ocrSettings.enabled -> "On, waiting for a key"
                     isStandaloneWithoutOcrKey -> "Off, needs a key"
                     ocrSettings.enabled -> "On"
@@ -845,12 +854,9 @@ internal fun OcrSettingsSection(
                 }
             }
 
-            // AI page reads on the user's OpenRouter credit (Oct 2026): about $0.0005 a page
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "AI page reads this month: $aiReadsUsed of ${OcrQuotaManager.MONTHLY_AI_READ_LIMIT}, " +
-                    "about \$" + String.format(java.util.Locale.US, "%.2f", aiReadsUsed * 0.0005) +
-                    " of your OpenRouter credit",
+                text = "AI page reads this month: $aiReadsUsed of ${OcrQuotaManager.MONTHLY_AI_READ_LIMIT}",
                 fontSize = EInkTheme.Preferences.explanationFontSize,
                 color = EInkTheme.Colors.darkGray
             )

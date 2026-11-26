@@ -19,12 +19,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * High-level AI client for executing requests via OpenRouter.
+ * High-level client for BooxDay AI requests.
  *
  * This client:
  * - Translates [AiRequest] objects into OpenRouter API format
  * - Handles response parsing with granular error types
- * - Logs requests and responses for debugging
+ * - Routes ChatGPT requests through the subscription session
  *
  * Usage:
  * ```kotlin
@@ -43,27 +43,49 @@ import kotlinx.coroutines.withContext
 object AiClient {
     private const val TAG = "AiClient"
 
-    /**
-     * Execute an AI request and return the response.
-     *
-     * AI runs only on the user's own OpenRouter key (Oct 2026). Without one, or when OpenRouter
-     * rejects it, the request is not retried and the "Add your OpenRouter key" popup opens
-     * (unless [promptForKey] is false, for work the user did not start, such as search indexing).
-     *
-     * @param request The [AiRequest] to execute
-     * @param promptForKey Open the key popup on a missing or rejected key
-     * @param notePick Record a picked model's failure for the AI Models card; false for the check of
-     *   a model that is not the pick yet (AiModelCheck)
-     * @return [AiResponse] with the result or error
-     */
+    /** Dispatch a request only to the provider selected for its model. */
     suspend fun execute(request: AiRequest, promptForKey: Boolean = true, notePick: Boolean = true): AiResponse<String> {
-        Log.d(TAG, "Executing request with model: ${request.model.displayName}")
-        Log.d(TAG, "Messages: ${request.messages.size}, JSON output: ${request.jsonOutput}, Reasoning: ${request.enableReasoning}")
+        val provider = if (request.model is AiModel.ChatGpt) AiProvider.CHATGPT else AiProvider.OPENROUTER
+        val selection = AiProvider.capture()
+        val allowed = {
+            AiProvider.allows(provider) && selection.allows(provider) &&
+                (!request.handwritingIndexing || com.boox.day.data.datastore.GlobalAppSettings.current.ocrSettings.enabled)
+        }
+        if (!com.boox.day.data.datastore.GlobalAppSettings.current.aiEnabled) {
+            return AiResponse.Error.ServiceUnavailable(AiProblem.AI_OFF.message)
+        }
+        if (!com.boox.day.data.datastore.GlobalAppSettings.loaded) {
+            return AiResponse.Error.ServiceUnavailable("AI Settings are loading. Try again.")
+        }
+        if (!allowed()) return AiResponse.Error.RouteChanged()
+        val model = request.model
+        val result = if (model is AiModel.ChatGpt) {
+            val response = ChatGptProvider.session?.execute(model, request, allowed)
+                ?: chatGptError("ChatGPT connections are loading. Try again.", AiProblem.CHATGPT_CONNECTION)
+            if (response is AiResponse.Error.ChatGpt &&
+                response.problem == AiProblem.CHATGPT_CONNECTION && promptForKey && allowed() && !AiProvider.ready
+            ) AiKeyGate.open(AiKeyGate.Reason.NO_KEY)
+            response
+        } else {
+            executeOpenRouter(request, promptForKey, notePick, allowed)
+        }
+        if (result is AiResponse.Error && result !is AiResponse.Error.RouteChanged) {
+            val scopeId = kotlin.coroutines.coroutineContext[LastAiProblem.ScopeElement]?.scopeId
+            LastAiProblem.noteTry(request, result, scopeId = scopeId)
+        }
+        return result
+    }
 
-        // The key may still be loading if this runs right after the app started
+    private suspend fun executeOpenRouter(
+        request: AiRequest,
+        promptForKey: Boolean,
+        notePick: Boolean,
+        allowed: () -> Boolean
+    ): AiResponse<String> {
+        // The key may still be loading if this runs right after the app started.
         withContext(Dispatchers.IO) { UserOpenRouterKey.ensureLoaded() }
+        if (!allowed()) return AiResponse.Error.RouteChanged()
         if (!OpenRouterClient.hasApiKey()) {
-            Log.w(TAG, "No OpenRouter key saved")
             if (promptForKey) AiKeyGate.open(AiKeyGate.Reason.NO_KEY)
             return AiResponse.Error.NoApiKey()
         }
@@ -89,17 +111,13 @@ object AiClient {
                 cause = e
             )
         }
+        if (!allowed()) return AiResponse.Error.RouteChanged()
         if (result is AiResponse.Error.KeyRejected && promptForKey) {
             AiKeyGate.open(AiKeyGate.Reason.KEY_REJECTED)
         }
         noteCreditState(request.model.id, result)
         // A picked model's failure shows on its AI Models row until it answers again (Oct 2026)
         if (notePick) com.boox.day.api.AiPickStatus.noteResult(request.model, result)
-        // Behind the next failure a dialog shows (2 Nov 2026); attributed to the active invocation scope if any
-        if (result is AiResponse.Error) {
-            val scopeId = kotlin.coroutines.coroutineContext[LastAiProblem.ScopeElement]?.scopeId
-            LastAiProblem.noteTry(request, result, scopeId = scopeId)
-        }
         return result
     }
 
@@ -123,19 +141,6 @@ object AiClient {
         body: com.boox.day.api.ChatResponse?,
         requestModelId: String
     ): AiResponse<String> {
-        // DEBUG: Log full response structure for troubleshooting
-        Log.d(TAG, "═══════════════ RESPONSE DEBUG ═══════════════")
-        Log.d(TAG, "Model ID: ${body?.model ?: "null"}")
-        Log.d(TAG, "Choices count: ${body?.choices?.size ?: 0}")
-        body?.choices?.forEachIndexed { idx, choice ->
-            Log.d(TAG, "Choice[$idx] finish_reason: ${choice.finishReason}")
-            Log.d(TAG, "Choice[$idx] message.role: ${choice.message?.role}")
-            Log.d(TAG, "Choice[$idx] message.content: '${choice.message?.content?.take(200) ?: "NULL"}'...")
-        }
-        Log.d(TAG, "Usage: prompt=${body?.usage?.promptTokens}, completion=${body?.usage?.completionTokens}, total=${body?.usage?.totalTokens}")
-        Log.d(TAG, "Error: ${body?.error?.code} - ${body?.error?.message}")
-        Log.d(TAG, "═══════════════════════════════════════════════")
-
         return when {
             // Check for API-level error in response body
             body?.error != null -> {
@@ -255,7 +260,6 @@ object AiClient {
     ): AiResponse<String> {
         val safeMessage = safeErrorSummary(code, errorBody)
         Log.e(TAG, "HTTP error $code (${errorBody?.length ?: 0} chars)")
-        Log.d(TAG, "HTTP error $code raw body: ${errorBody?.take(500)}")
 
         return when (code) {
             429 -> AiResponse.Error.RateLimitError(
@@ -359,10 +363,11 @@ object AiClient {
             request.jsonOutput -> listed.supportsJson
             else -> false
         }
-        val providerConfig = if (request.zeroDataRetention || strictRouting) {
-            if (request.zeroDataRetention) Log.d(TAG, "Zero data retention providers only")
+        val requiresZdr = request.zeroDataRetention || request.handwritingIndexing
+        val providerConfig = if (requiresZdr || strictRouting) {
+            if (requiresZdr) Log.d(TAG, "Zero data retention providers only")
             ProviderConfig(
-                zdr = true.takeIf { request.zeroDataRetention },
+                zdr = true.takeIf { requiresZdr },
                 requireParameters = true.takeIf { strictRouting }
             )
         } else {

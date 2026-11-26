@@ -92,8 +92,10 @@ object OpenRouterLinks {
 fun AiKeyGateHost(aiSettingsOpen: Boolean, onOpenAiSettings: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val provider = com.boox.day.api.ai.AiProvider.current
+    val openRouter = provider == com.boox.day.api.ai.AiProvider.OPENROUTER
     val reason = AiKeyGate.openReason
-    if (reason != null) {
+    if (reason != null && openRouter) {
         OpenRouterIntroPopup(
             rejected = reason == AiKeyGate.Reason.KEY_REJECTED,
             onNotNow = { AiKeyGate.close() },
@@ -107,12 +109,12 @@ fun AiKeyGateHost(aiSettingsOpen: Boolean, onOpenAiSettings: () -> Unit) {
     }
 
     val resultCount = OpenRouterConnect.resultCount
-    LaunchedEffect(resultCount, aiSettingsOpen) {
+    LaunchedEffect(resultCount, aiSettingsOpen, openRouter) {
         if (resultCount <= AiKeyGate.handledResult) return@LaunchedEffect
-        if (aiSettingsOpen && AiKeyGate.shownResult == null) AiKeyGate.markResultHandled(resultCount)
+        if (!openRouter || (aiSettingsOpen && AiKeyGate.shownResult == null)) AiKeyGate.markResultHandled(resultCount)
         else AiKeyGate.showResult(resultCount)
     }
-    if (AiKeyGate.shownResult != null) {
+    if (AiKeyGate.shownResult != null && openRouter) {
         val status = OpenRouterConnect.status
         var retrying by remember { mutableStateOf(false) }
         LaunchedEffect(status) { if (status !is OpenRouterConnect.Status.Connecting) retrying = false }
@@ -133,6 +135,13 @@ fun AiKeyGateHost(aiSettingsOpen: Boolean, onOpenAiSettings: () -> Unit) {
                     scope.launch { if (!OpenRouterLinks.connect(context)) AiKeyGate.requestAddKey() }
                 }
             )
+        }
+    }
+
+    LaunchedEffect(openRouter) {
+        if (!openRouter) {
+            AiKeyGate.close()
+            AiKeyGate.closeResult(resume = false)
         }
     }
 

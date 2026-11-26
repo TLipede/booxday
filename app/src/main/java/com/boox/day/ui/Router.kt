@@ -38,7 +38,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.boox.day.R
-import com.boox.day.api.OpenRouterClient
 import com.boox.day.data.datastore.GlobalAppSettings
 import com.boox.day.data.db.DayPageRepository
 import com.boox.day.data.db.TaskRepository
@@ -146,10 +145,10 @@ fun Router() {
         // Launch non-blocking preloads in the LaunchedEffect scope so withTimeoutOrNull actually caps
         // splash exit (inside coroutineScope{}, the scope still waited for pagesJob after timeout: M7(3))
         launch(Dispatchers.IO) {
-            if (OpenRouterClient.hasApiKey()) {
-                logRouter.i("PERF: AI key available at startup")
+            if (com.boox.day.api.ai.AiProvider.ready) {
+                logRouter.i("PERF: AI provider ready at startup")
             } else {
-                logRouter.i("PERF: Startup without AI key - using local key prompt flow")
+                logRouter.i("PERF: Selected AI provider needs setup")
             }
         }
         val pagesJob = launch(Dispatchers.IO) {

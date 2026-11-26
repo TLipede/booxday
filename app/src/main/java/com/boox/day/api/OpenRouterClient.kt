@@ -1,6 +1,7 @@
 package com.boox.day.api
 
 import com.boox.day.BuildConfig
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.security.UserOpenRouterKey
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -27,6 +28,7 @@ object OpenRouterClient {
 
     // Dynamic auth interceptor - resolves key at request time
     private val authInterceptor = Interceptor { chain ->
+        if (!AiProvider.allows(AiProvider.OPENROUTER)) throw java.io.IOException("OpenRouter is no longer selected")
         val request = chain.request().newBuilder()
             .addHeader("Authorization", "Bearer ${getActiveApiKey()}")
             .build()
@@ -43,6 +45,8 @@ object OpenRouterClient {
     }
 
     private val okHttpClient = OkHttpClient.Builder()
+        .followRedirects(false)
+        .followSslRedirects(false)
         .addInterceptor(authInterceptor)
         .addInterceptor(loggingInterceptor)
         .connectTimeout(30, TimeUnit.SECONDS)

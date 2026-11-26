@@ -203,6 +203,10 @@ class TranscriptionService(
                 Log.d(TAG, "${settings.voiceTextMode} mode, speech recognition available - will use SpeechRecognizer")
 
             TranscriptionSource.GEMINI -> {
+                if (settings.aiProvider == com.boox.day.api.ai.AiProvider.CHATGPT) {
+                    return StartResult.RecordingFailed("ChatGPT plan usage does not support voice recordings. Use tablet speech recognition when available.")
+                }
+                if (!settings.aiEnabled) return StartResult.RecordingFailed(com.boox.day.api.ai.AiProblem.AI_OFF.message)
                 // AI transcription runs on the user's own OpenRouter key (Oct 2026)
                 if (!com.boox.day.security.UserOpenRouterKey.hasKey) {
                     Log.w(TAG, "GEMINI mode without an OpenRouter key")

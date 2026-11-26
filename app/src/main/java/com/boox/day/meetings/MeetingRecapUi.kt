@@ -26,7 +26,7 @@ import com.boox.day.io.MeetingExport
 import com.boox.day.proposals.ProposalValidator
 import com.boox.day.proposals.ScheduleItemAnswer
 import com.boox.day.proposals.ScheduleUi
-import com.boox.day.security.UserOpenRouterKey
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.ui.AiKeyGate
 import com.boox.day.ui.CalendarAiNotice
 import com.boox.day.ui.ScreenCentre
@@ -134,14 +134,14 @@ private fun RecapFlow(event: CalendarEvent) {
     var skipped by remember { mutableIntStateOf(0) }
     var noteCount by remember { mutableIntStateOf(0) }
 
-    suspend fun generate(pages: MeetingPages.Pages, fingerprint: String) {
+    suspend fun generate(pages: MeetingPages.Pages, fingerprint: String) = withContext(AiProvider.capture()) {
         screen = RecapScreen.Reading(pages.notes.size)
         try {
             val read = MeetingPages.readText(context, pages.date, pages.notes)
             skipped = read.skipped
             if (read.text.isBlank()) {
                 screen = RecapScreen.Blocked(NO_NOTES)
-                return
+                return@withContext
             }
             screen = when (val result = MeetingRecapService.make(
                 context, event.id, event.title, pages.date, read.text, fingerprint,
@@ -175,7 +175,7 @@ private fun RecapFlow(event: CalendarEvent) {
             // Unchanged notes: no AI call, and no key needed
             cached != null && !force -> screen = RecapScreen.Show(cached.first, changed = cached.second != fingerprint)
             !GlobalAppSettings.current.aiEnabled -> screen = RecapScreen.Blocked(AI_OFF)
-            !UserOpenRouterKey.hasKey -> {
+            !AiProvider.ready -> {
                 MeetingRecapUi.close()
                 AiKeyGate.requireKey { MeetingRecapUi.open(event) }
             }

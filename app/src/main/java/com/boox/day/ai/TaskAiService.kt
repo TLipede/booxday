@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.util.Base64
 import android.util.Log
 import com.boox.day.api.ModelConfigProvider
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.api.ai.AiCapability
 import com.boox.day.api.ai.AiClient
 import com.boox.day.api.ai.AiModel
@@ -21,6 +22,7 @@ import com.boox.day.ocr.TaskOcrService
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.google.gson.annotations.SerializedName
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
@@ -684,12 +686,10 @@ object TaskAiService {
         transcribedText: String,
         currentDate: LocalDate = LocalDate.now(),
         onStageChange: (String) -> Unit = {}
-    ): VoiceTaskResult {
+    ): VoiceTaskResult = withContext(AiProvider.capture()) {
         if (transcribedText.isBlank()) {
-            return VoiceTaskResult.empty("No speech detected")
+            return@withContext VoiceTaskResult.empty("No speech detected")
         }
-
-        Log.d(TAG, "parseTranscribedText: '${transcribedText.take(100)}...'")
 
         // ─────────────────────────────────────────────────────────────────────
         // STAGE 1: SKIPPED - TranscriptionService already transcribed
@@ -741,7 +741,7 @@ object TaskAiService {
             correctedText
         }
 
-        return when (val result = AiRetryExecutor.execute(
+        return@withContext when (val result = AiRetryExecutor.execute(
             models = modelsToTry,
             buildRequest = { model ->
                 aiRequest {
@@ -756,7 +756,6 @@ object TaskAiService {
                 }
             },
             processResponse = { response, model ->
-                Log.d(TAG, "Stage 3 complete (${model.displayName}): ${response.data.take(500)}...")
                 val parsed = parseVoiceTaskResponse(response.data)
                 if (parsed.isSuccess) parsed else null
             }
@@ -1011,7 +1010,6 @@ OUTPUT FORMAT (JSON only, no markdown):
                 }
             },
             processResponse = { response, model ->
-                Log.d(TAG, "No-tasks insights (${model.displayName}): ${response.data.take(300)}...")
                 val parsed = parseInsightsResponse(response.data)
                 parsed.takeIf { it.isNotEmpty() }
             }
@@ -1196,7 +1194,6 @@ OUTPUT FORMAT (JSON only):
                 }
             },
             processResponse = { response, model ->
-                Log.d(TAG, "No-tasks weekly insights (${model.displayName}): ${response.data.take(300)}...")
                 parseWeeklyInsightsResponse(response.data)
             }
         )) {
@@ -1690,7 +1687,6 @@ OUTPUT FORMAT (JSON only):
                 }
             },
             processResponse = { response, _ ->
-                Log.d(TAG, "V3 suggestions response: ${response.data.take(500)}...")
                 onStageChange("Organizing your suggestions...")
                 // An answer that can't be read goes to the next model (29 Oct 2026: it ended the
                 // feature with "Could not parse suggestions", no other model tried)
@@ -2021,7 +2017,6 @@ OUTPUT FORMAT (JSON only):
                 }
             },
             processResponse = { response, model ->
-                Log.d(TAG, "Breakdown V3 response (${model.displayName}): ${response.data.take(500)}...")
                 // An unreadable answer or too few subtasks goes to the next model (29 Oct 2026:
                 // it ended the feature, no other model tried)
                 parseBreakdownResponse(response.data, taskText).takeIf { it.error == null }

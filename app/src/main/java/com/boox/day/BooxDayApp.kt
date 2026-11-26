@@ -149,8 +149,14 @@ class BooxDayApp : Application() {
     /** The user's own OpenRouter key (the only key AI features use), read from encrypted storage off the main thread. */
     private fun initUserOpenRouterKey() {
         com.boox.day.security.UserOpenRouterKey.init(this)
+        com.boox.day.api.ai.ChatGptProvider.init(this)
         applicationScope.launch(Dispatchers.IO) {
             com.boox.day.security.UserOpenRouterKey.ensureLoaded()
+            try {
+                com.boox.day.api.ai.ChatGptProvider.session?.load()
+            } catch (_: com.boox.day.api.ai.ChatGptFailure) {
+                // AI Settings displays a secure-storage error. Credentials stay unavailable.
+            }
         }
         // Oct 2026: OpenRouter's model list, so retired models are skipped (refreshed daily with a key)
         com.boox.day.api.OpenRouterModelCatalog.init(this)

@@ -19,7 +19,8 @@ import com.boox.day.data.db.MIGRATION_29_30
 import com.boox.day.data.db.MIGRATION_30_31
 import com.boox.day.data.db.MIGRATION_31_32
 import com.boox.day.data.db.MIGRATION_32_33
-import com.boox.day.data.db.MIGRATION_33_34, MIGRATION_34_35
+import com.boox.day.data.db.MIGRATION_33_34
+import com.boox.day.data.db.MIGRATION_34_35
 import com.boox.day.data.db.TaskSyncSchema
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals

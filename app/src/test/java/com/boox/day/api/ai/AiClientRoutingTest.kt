@@ -79,5 +79,7 @@ class AiClientRoutingTest {
         listed(catalog("google/gemini-3.1-flash-lite"))
         val request = AiClient.buildApiRequest(withSchema("google/gemini-3.1-flash-lite").copy(zeroDataRetention = true))
         assertEquals(ProviderConfig(zdr = true, requireParameters = true), request.provider)
+        val indexing = AiClient.buildApiRequest(withSchema("google/gemini-3.1-flash-lite").copy(handwritingIndexing = true))
+        assertEquals(ProviderConfig(zdr = true, requireParameters = true), indexing.provider)
     }
 }

@@ -190,6 +190,7 @@ class MainActivity : ComponentActivity() {
                     val mergedSettings = outcome.settings
                     GlobalAppSettings.update(mergedSettings)
                     GlobalAppSettings.loaded = true
+                    com.boox.day.api.OpenRouterModelCatalog.onSettingsLoaded()
                     com.boox.day.diagnostics.StartReport.mark("Settings loaded")
                     if (outcome.fromStorage) {
                         Log.i(TAG, "Full settings loaded async from Room")

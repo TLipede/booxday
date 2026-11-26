@@ -7,6 +7,7 @@ import android.graphics.RectF
 import android.util.Base64
 import androidx.compose.ui.geometry.Offset
 import com.boox.day.api.ModelConfigProvider
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.api.ai.AiCapability
 import com.boox.day.api.ai.AiClient
 import com.boox.day.api.ai.AiModel
@@ -16,6 +17,7 @@ import com.boox.day.data.db.Stroke
 import com.boox.day.data.db.TextAnnotation
 import com.boox.day.editor.drawing.drawStroke
 import com.boox.day.utils.TaggedLog
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
@@ -147,12 +149,12 @@ object AiTranslationService {
         content: TranslationContent,
         targetLanguage: String = "English",
         onStateChange: (TranslationState) -> Unit
-    ): TranslationResult {
+    ): TranslationResult = withContext(AiProvider.capture()) {
         // Check for empty content
         if (!content.hasContent) {
             log.i("No content to translate")
             onStateChange(TranslationState.NoContent("No content on this page to translate"))
-            return TranslationResult(
+            return@withContext TranslationResult(
                 translatedText = "",
                 detectedLanguages = "",
                 wasSuccessful = false,
@@ -212,7 +214,7 @@ object AiTranslationService {
             // found" even with a page full of handwriting and Wi-Fi off)
             if (extractedTexts.isEmpty() && readFailure != null) {
                 onStateChange(TranslationState.Error(readFailure))
-                return TranslationResult(
+                return@withContext TranslationResult(
                     translatedText = "",
                     detectedLanguages = "",
                     wasSuccessful = false,
@@ -224,7 +226,7 @@ object AiTranslationService {
             if (extractedTexts.isEmpty()) {
                 log.i("No readable text found in content")
                 onStateChange(TranslationState.NoContent("No readable text found on this page"))
-                return TranslationResult(
+                return@withContext TranslationResult(
                     translatedText = "",
                     detectedLanguages = "",
                     wasSuccessful = false,
@@ -250,7 +252,7 @@ object AiTranslationService {
                 val error = translationResult.exceptionOrNull()?.message ?: "Translation failed"
                 log.e("Stage 3 failed: $error")
                 onStateChange(TranslationState.Error(error))
-                return TranslationResult(
+                return@withContext TranslationResult(
                     translatedText = "",
                     detectedLanguages = "",
                     wasSuccessful = false,
@@ -268,7 +270,7 @@ object AiTranslationService {
             log.i("Translation complete: ${translatedText.length} chars, detected: $detectedLanguagesStr")
             onStateChange(TranslationState.Success(translatedText, detectedLanguagesStr))
 
-            return TranslationResult(
+            return@withContext TranslationResult(
                 translatedText = translatedText,
                 detectedLanguages = detectedLanguagesStr,
                 wasSuccessful = true,
@@ -284,7 +286,7 @@ object AiTranslationService {
                 else -> "Translation failed: ${e.message}"
             }
             onStateChange(TranslationState.Error(errorMessage))
-            return TranslationResult(
+            return@withContext TranslationResult(
                 translatedText = "",
                 detectedLanguages = "",
                 wasSuccessful = false,
@@ -297,7 +299,6 @@ object AiTranslationService {
         log.d("Stage 2: Semantic inference for OCR cleanup")
         val inferenceResult = TextInferenceService.refineNoteText(rawOcrText)
         if (inferenceResult.wasModified) {
-            log.d("Inference corrected OCR text: ${inferenceResult.refinedText.take(100)}...")
         }
         return inferenceResult.refinedText
     }
@@ -618,14 +619,14 @@ RULES:
         pages: List<PageTranslationData>,
         targetLanguage: String = "English",
         onStateChange: (MultiPageTranslationState) -> Unit
-    ): TranslationResult {
+    ): TranslationResult = withContext(AiProvider.capture()) {
         // Filter to pages with content
         val pagesWithContent = pages.filter { it.hasContent }
 
         if (pagesWithContent.isEmpty()) {
             log.i("No pages with content to translate")
             onStateChange(MultiPageTranslationState.NoContent("No content found on any page"))
-            return TranslationResult(
+            return@withContext TranslationResult(
                 translatedText = "",
                 detectedLanguages = "",
                 wasSuccessful = false,
@@ -672,7 +673,7 @@ RULES:
             if (perPageTranslations.isEmpty()) {
                 log.i("No readable content found across all pages")
                 onStateChange(MultiPageTranslationState.NoContent(pageFailure ?: "No readable content found on any page"))
-                return TranslationResult(
+                return@withContext TranslationResult(
                     translatedText = "",
                     detectedLanguages = "",
                     wasSuccessful = false,
@@ -700,7 +701,7 @@ RULES:
             log.i("Multi-page translation complete: ${fullTranslation.length} chars from ${perPageTranslations.size} pages")
             onStateChange(MultiPageTranslationState.Success(fullTranslation, detectedLanguagesStr))
 
-            return TranslationResult(
+            return@withContext TranslationResult(
                 translatedText = fullTranslation,
                 detectedLanguages = detectedLanguagesStr,
                 wasSuccessful = true,
@@ -716,7 +717,7 @@ RULES:
                 else -> "Translation failed: ${e.message}"
             }
             onStateChange(MultiPageTranslationState.Error(errorMessage))
-            return TranslationResult(
+            return@withContext TranslationResult(
                 translatedText = "",
                 detectedLanguages = "",
                 wasSuccessful = false,

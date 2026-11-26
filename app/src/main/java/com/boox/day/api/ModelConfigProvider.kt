@@ -3,6 +3,8 @@ package com.boox.day.api
 import android.util.Log
 import com.boox.day.api.ai.AiConfig
 import com.boox.day.api.ai.AiModel
+import com.boox.day.api.ai.AiProvider
+import com.boox.day.api.ai.ChatGptProvider
 import com.boox.day.data.datastore.AiModelChoice
 import com.boox.day.data.datastore.GlobalAppSettings
 
@@ -52,7 +54,7 @@ object ModelConfigProvider {
         AiJob.VOICE to listOf(GEMINI_31_FLASH_LITE, GEMINI_35_FLASH_LITE),
         AiJob.WRITING to listOf(GPT_6_LUNA, GEMINI_31_FLASH_LITE, GEMINI_38_FLASH),
         AiJob.PLANNING to listOf(GEMINI_38_FLASH, GPT_6_LUNA, GEMINI_31_FLASH_LITE),
-        // Chosen by the 14 Oct 2026 test on real pages (OpenRouterOcrService)
+        // Chosen by the 14 Oct 2026 test on real pages (HandwritingIndexingService)
         AiJob.SEARCH_INDEXING to listOf(GEMINI_31_FLASH_LITE)
     )
 
@@ -80,6 +82,11 @@ object ModelConfigProvider {
      * is never skipped down to nothing.
      */
     fun getChain(job: AiJob): List<AiModel> {
+        if (AiProvider.current == AiProvider.CHATGPT) return listOf(ChatGptProvider.selectedModel())
+        return getOpenRouterChain(job)
+    }
+
+    private fun getOpenRouterChain(job: AiJob): List<AiModel> {
         val pick = userModel(job)?.takeIf { pickProblem(job, it.id) == null }
         return (listOfNotNull(pick) + usableDefaults(job)).distinctBy { it.id }
     }
@@ -139,7 +146,7 @@ object ModelConfigProvider {
     )
 
     fun modelInUse(job: AiJob): InUse {
-        val first = getChain(job).first()
+        val first = getOpenRouterChain(job).first()
         val picked = (first as? AiModel.Custom)?.userChoice == true
         val waits = !picked && OpenRouterAccount.isFreeOnly() && !OpenRouterAccount.isFreeModel(first.id)
         val unavailable = if (picked) null else userModel(job)

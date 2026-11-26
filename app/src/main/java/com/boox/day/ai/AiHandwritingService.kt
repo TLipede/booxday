@@ -8,6 +8,7 @@ import android.util.Base64
 import androidx.compose.ui.geometry.Offset
 import com.boox.day.api.Modality
 import com.boox.day.api.ModelConfigProvider
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.api.ai.AiClient
 import com.boox.day.api.ai.AiModel
 import com.boox.day.api.ai.AiResponse
@@ -21,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
@@ -309,16 +311,16 @@ OUTPUT FORMAT:
         config: RecognitionModelConfig = RecognitionModelConfig.DEFAULT,
         context: android.content.Context? = null,
         onStateChange: (RecognitionState) -> Unit
-    ): Result<AiRecognitionResult> {
+    ): Result<AiRecognitionResult> = withContext(AiProvider.capture()) {
         if (strokes.isEmpty()) {
-            return Result.failure(IllegalArgumentException("No strokes to recognize"))
+            return@withContext Result.failure(IllegalArgumentException("No strokes to recognize"))
         }
 
         // ─────────────────────────────────────────────────────────────────────
         // Digital Ink Path (fast, on-device, ~100-500ms)
         // ─────────────────────────────────────────────────────────────────────
         if (config.useDigitalInk) {
-            return recognizeWithDigitalInk(strokes, context, onStateChange)
+            return@withContext recognizeWithDigitalInk(strokes, context, onStateChange)
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -344,7 +346,7 @@ OUTPUT FORMAT:
                 val error = stage1Result.exceptionOrNull()?.message ?: "Vision model failed"
                 log.e("Stage 1 failed: $error")
                 onStateChange(RecognitionState.Error(error))
-                return Result.failure(stage1Result.exceptionOrNull()!!)
+                return@withContext Result.failure(stage1Result.exceptionOrNull()!!)
             }
 
             val rawText = stage1Result.getOrThrow()
@@ -353,7 +355,7 @@ OUTPUT FORMAT:
             if (rawText.isBlank() || rawText.contains(NO_TEXT_MARKER)) {
                 log.i("Stage 1: No handwritten text detected")
                 onStateChange(RecognitionState.NoTextFound("No handwritten text detected in selection"))
-                return Result.failure(NoTextFoundException("No handwritten text detected"))
+                return@withContext Result.failure(NoTextFoundException("No handwritten text detected"))
             }
 
             log.d("Stage 1 complete: Extracted ${rawText.length} chars")
@@ -363,7 +365,6 @@ OUTPUT FORMAT:
             // ─────────────────────────────────────────────────────────────────────
             val inferredText = if (config.enableSemanticInference) {
                 onStateChange(RecognitionState.InferringMeaning)
-                log.d("Stage 1.5: Inferring meaning with TextInferenceService (context=${config.inferenceContext})")
 
                 val inferenceResult = TextInferenceService.refineText(
                     rawText = rawText,
@@ -373,14 +374,11 @@ OUTPUT FORMAT:
 
                 if (inferenceResult.wasModified) {
                     log.i("Stage 1.5: Text refined (confidence=${inferenceResult.confidence})")
-                    log.d("Stage 1.5: '${rawText.take(100)}...' → '${inferenceResult.refinedText.take(100)}...'")
                 } else {
-                    log.d("Stage 1.5: No changes needed (confidence=${inferenceResult.confidence})")
                 }
 
                 inferenceResult.refinedText
             } else {
-                log.d("Stage 1.5: Skipped (enableSemanticInference=false)")
                 rawText
             }
 
@@ -393,7 +391,7 @@ OUTPUT FORMAT:
                     hasFormatting = false
                 )
                 onStateChange(RecognitionState.Success(result))
-                return Result.success(result)
+                return@withContext Result.success(result)
             }
 
             onStateChange(RecognitionState.FormattingText)
@@ -418,7 +416,7 @@ OUTPUT FORMAT:
             )
 
             onStateChange(RecognitionState.Success(result))
-            return Result.success(result)
+            return@withContext Result.success(result)
 
         } catch (e: Exception) {
             log.e("Recognition failed: ${e.message}", e)
@@ -428,7 +426,7 @@ OUTPUT FORMAT:
                 else -> "Recognition failed: ${e.message}"
             }
             onStateChange(RecognitionState.Error(errorMessage))
-            return Result.failure(e)
+            return@withContext Result.failure(e)
         }
     }
 
@@ -497,7 +495,7 @@ OUTPUT FORMAT:
         base64Image: String,
         config: RecognitionModelConfig
     ): Result<String> {
-        return if (config.useConcurrentVision) {
+        return if (config.useConcurrentVision && AiProvider.current == AiProvider.OPENROUTER) {
             executeStage1Concurrent(base64Image, config)
         } else {
             executeStage1WithFallback(base64Image, config)
@@ -630,11 +628,7 @@ OUTPUT FORMAT:
         return when (val response = AiClient.execute(request)) {
             is AiResponse.Success -> {
                 log.i("${model.id} SUCCESS (${response.data.length} chars, tokens=${response.usage?.totalTokens})")
-                log.d("=== RESPONSE START ===")
-                response.data.chunked(500).forEachIndexed { idx, chunk ->
-                    log.d("[$idx]: $chunk")
-                }
-                log.d("=== RESPONSE END ===")
+
 
                 Result.success(parseStage1Text(response.data))
             }

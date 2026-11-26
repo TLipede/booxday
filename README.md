@@ -20,7 +20,7 @@ BooxDay is free and open source under the [GNU General Public License v3.0](LICE
 - Export a page, a day or a week as a PDF, pictures or Markdown for Obsidian, or share it to another app
 - A week view with events and tasks together
 - Meeting recaps and prep, handwriting to calendar, and sharing into BooxDay from other apps
-- Optional AI features (voice to event or task, handwriting to text, summaries, translation, task suggestions, search of handwritten pages) on your own [OpenRouter](https://openrouter.ai) account
+- Optional AI features using your own [OpenRouter](https://openrouter.ai) account or an eligible ChatGPT plan. ChatGPT supports text and handwriting tools with compatible models, including optional background handwriting indexing. OpenRouter also supports AI audio.
 - Connect OpenRouter in a few taps from the app, or paste a key you already have. Without credit, AI uses OpenRouter's free models
 - Choose the AI model for each job, or leave BooxDay's choice. If your model fails, BooxDay's own model answers instead
 - Designed for e-ink: no animations, high contrast, large touch targets
@@ -36,7 +36,7 @@ BooxDay is free and open source under the [GNU General Public License v3.0](LICE
 ## Requirements
 
 - An Onyx BOOX tablet running Android 10 or later. It has been tested on Boox Note Air3C, Air5C, Air6C and Go 10.3, 10.3 gen II Lumi, Go 7 gen II B&W, Go 6 gen II B&W.
-- For AI features: a free OpenRouter account. Connect it in Settings > AI Settings. The app has no AI key built in
+- For AI features: an OpenRouter account or an eligible ChatGPT plan. Connect your provider in Settings > AI Settings.
 
 ## Install
 
@@ -53,7 +53,7 @@ BooxDay is free. It is not on Google Play, so you install it from an APK file. T
 5. **Tap Install.** If Android asks "Do you want to install this app?", confirm.
 6. **If you see "Google Play Protect" or "Blocked by Play Protect"**: this is Google's automatic scan, and it shows up for apps it has not seen before. It does not mean the app is harmful. Tap **More details**, then **Install anyway** (or **Open anyway**). If it only offers "Scan app", tap that, wait for the result, then continue. You can leave Play Protect on.
 7. **Tap Open**, pick your calendar (Google, Outlook, iCloud or another CalDAV server, or on the tablet only) and you are done.
-8. Optional: for AI features, go to Settings > AI Settings and tap **Connect OpenRouter**.
+8. Optional: in Settings > AI Settings, connect OpenRouter or select ChatGPT, tap **Continue with ChatGPT**, and choose a model. See [ChatGPT setup and limitations](docs/chatgpt-provider.md).
 
 ### Good to know
 
@@ -91,7 +91,7 @@ It's never required, and it doesn't buy support or features: BooxDay stays free 
 
 ## Privacy
 
-Your memos, tasks and calendar are stored on the tablet. BooxDay has no server and sends nothing to its developer. It goes online to download Google's on-device handwriting model and for the features you turn on: calendar sync (Google, Microsoft or the calendar server you add), Task Sync (Google Tasks or your CalDAV server), backup to your own Google Drive, and AI features (OpenRouter, with your own key).
+Your memos, tasks and calendar are stored on the tablet. BooxDay has no server and sends nothing to its developer. It goes online to download Google's on-device handwriting model and for the features you turn on: calendar sync (Google, Microsoft or the calendar server you add), Task Sync (Google Tasks or your CalDAV server), backup to your own Google Drive, and AI features (OpenRouter or OpenAI, according to your selection).
 
 ## Credits
 

@@ -3,6 +3,7 @@ package com.boox.day.ai
 import android.graphics.Bitmap
 import android.util.Base64
 import com.boox.day.api.ModelConfigProvider
+import com.boox.day.api.ai.AiProvider
 import com.boox.day.api.ai.AiCapability
 import com.boox.day.api.ai.AiModel
 import com.boox.day.api.ai.AiProblem
@@ -135,6 +136,8 @@ object MemoToTasksService {
             when (response) {
                 // The model answered, but nothing usable came back
                 is AiResponse.Success -> lastError = null
+                is AiResponse.Error.RouteChanged,
+                is AiResponse.Error.ChatGpt,
                 is AiResponse.Error.NoApiKey,
                 is AiResponse.Error.KeyRejected -> {
                     keyProblem = response
@@ -331,10 +334,10 @@ Use this context to:
         strokes: List<Stroke>,
         dayContext: DateSemanticContext? = null,
         onStageChange: (String) -> Unit
-    ): MemoToTasksResult {
+    ): MemoToTasksResult = withContext(AiProvider.capture()) {
         val bitmap = withContext(Dispatchers.Default) { MemoPageContent.renderSelection(strokes) }
-            ?: return failed(NO_TEXT_IN_SELECTION)
-        return try {
+            ?: return@withContext failed(NO_TEXT_IN_SELECTION)
+        return@withContext try {
             // Tasks already on the day don't count: the user chose this text
             convertPicture(bitmap, Source.SELECTION, dayContext, emptyList(), onStageChange)
         } finally {
@@ -359,7 +362,7 @@ Use this context to:
         dayContext: DateSemanticContext?,
         existingTasks: List<String>,
         onStageChange: (String) -> Unit
-    ): MemoToTasksResult {
+    ): MemoToTasksResult = withContext(AiProvider.capture()) {
         val rawText = try {
             onStageChange(if (source == Source.SELECTION) "Capturing your selection..." else "Capturing your memo...")
             val base64Image = encodeBitmapToBase64(bitmap)
@@ -371,13 +374,13 @@ Use this context to:
             throw e
         } catch (e: Exception) {
             log.e("Reading the handwriting failed: ${e.message}")
-            return failed(e.message ?: "Conversion failed. Please try again.")
+            return@withContext failed(e.message ?: "Conversion failed. Please try again.")
         }
         if (rawText.isBlank()) {
             log.w("No text detected")
-            return failed(noText(source))
+            return@withContext failed(noText(source))
         }
-        return convertReadText(rawText, source, dayContext, existingTasks, onStageChange)
+        return@withContext convertReadText(rawText, source, dayContext, existingTasks, onStageChange)
     }
 
     /**
@@ -393,12 +396,10 @@ Use this context to:
         onStageChange: (String) -> Unit
     ): MemoToTasksResult {
         log.i("Read ${rawText.length} chars")
-        log.d("Read text: $rawText")
         return try {
             // Stage 2: Semantic correction
             onStageChange("Cleaning up and fixing errors...")
             val cleanedText = TextInferenceService.refineText(rawText = rawText, context = InferenceContext.TASK).refinedText
-            log.d("Cleaned text: $cleanedText")
 
             // Stage 3: Task conversion
             onStageChange("Converting to actionable tasks...")
@@ -678,7 +679,7 @@ Use this context to:
         existingTasks: List<String>,
         onPageProgress: (current: Int, total: Int) -> Unit,
         onStageChange: (String) -> Unit
-    ): MemoToTasksResult {
+    ): MemoToTasksResult = withContext(AiProvider.capture()) {
         val allTasks = mutableListOf<ConvertedTask>()
         val total = pages.size
         var lastError: String? = null
@@ -705,7 +706,7 @@ Use this context to:
         }
 
         val deduped = allTasks.distinctBy { normalizeTaskKey(it.text) }.take(StructuredOutputSchemas.MEMO_TO_TASKS_MAX_ITEMS)
-        return MemoToTasksResult(
+        return@withContext MemoToTasksResult(
             originalText = "",
             cleanedText = "",
             tasks = deduped,

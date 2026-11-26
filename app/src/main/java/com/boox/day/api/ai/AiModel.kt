@@ -228,6 +228,16 @@ sealed class AiModel(
     )
 
     /**
+     * A subscription model pinned to the current ChatGPT account and model selection.
+     * The subscription catalog does not advertise capabilities. The Responses API validates them.
+     */
+    internal class ChatGpt(override val id: String, val generation: Long) : AiModel(
+        id, id.ifBlank { "ChatGPT" },
+        setOf(AiCapability.TEXT, AiCapability.VISION, AiCapability.JSON_OUTPUT),
+        AiConfig()
+    )
+
+    /**
      * Custom model for future extensibility.
      * Allows defining new models without modifying this sealed class.
      *
